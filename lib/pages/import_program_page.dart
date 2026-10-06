@@ -20,6 +20,7 @@ class _ImportProgramPageState extends State<ImportProgramPage> {
   final List<Uint8List> scanPages=[];
   DraftProgram? draft;
   bool busy=false;
+  Map<String,dynamic>? aiJson;
   final ai=AiGateway();
   @override void dispose(){text.dispose();super.dispose();}
 
@@ -94,7 +95,16 @@ class _ImportProgramPageState extends State<ImportProgramPage> {
   Future<void> aiParseText() async {
     if(text.text.trim().isEmpty){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Введите или вставьте программу')));return;}
     setState(()=>busy=true);
-    try { final json=await ai.analyzeText(text.text.trim()); final d=TrainingTextParser.fromAiJson(json); if(mounted)setState(()=>draft=d); }
+    try {
+      final json=await ai.analyzeText(text.text.trim());
+      final d=TrainingTextParser.fromAiJson(json);
+      if(mounted){
+        setState((){aiJson=json; draft=d;});
+        if(d.clarifications.isNotEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) { if(mounted) clarifyResult(); });
+        }
+      }
+    }
     catch(e){ if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString()))); }
     finally{if(mounted)setState(()=>busy=false);}
   }
@@ -111,10 +121,77 @@ class _ImportProgramPageState extends State<ImportProgramPage> {
     try {
       final json=await ai.analyzeImages(pages);
       final d=TrainingTextParser.fromAiJson(json);
-      if(mounted)setState(()=>draft=d);
+      if(mounted){
+        setState((){aiJson=json; draft=d;});
+        if(d.clarifications.isNotEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) { if(mounted) clarifyResult(); });
+        }
+      }
     } catch(e){
       if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString())));
     } finally{if(mounted)setState(()=>busy=false);}
+  }
+  Future<void> clarifyResult() async {
+    if(aiJson==null || draft==null || draft!.clarifications.isEmpty) return;
+    final answers=<String,String>{};
+    for(final q in draft!.clarifications) {
+      final controller=TextEditingController();
+      String? selected;
+      final answer=await showDialog<String>(
+        context:context,
+        barrierDismissible:false,
+        builder:(ctx)=>StatefulBuilder(builder:(ctx,setLocal){
+          return AlertDialog(
+            title:Text(q.question),
+            content:SizedBox(
+              width:420,
+              child:SingleChildScrollView(
+                child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+                  if(q.context.isNotEmpty) ...[
+                    Text('Фрагмент программы',style:Theme.of(ctx).textTheme.labelLarge),
+                    const SizedBox(height:6),
+                    Container(width:double.infinity,padding:const EdgeInsets.all(10),decoration:BoxDecoration(borderRadius:BorderRadius.circular(8),color:Theme.of(ctx).colorScheme.surfaceVariant),child:Text(q.context)),
+                    const SizedBox(height:12),
+                  ],
+                  if(q.options.isNotEmpty)
+                    ...q.options.map((option)=>Padding(
+                      padding:const EdgeInsets.only(bottom:6),
+                      child:ChoiceChip(label:Text(option),selected:selected==option,onSelected:(_){setLocal(()=>selected=option);}),
+                    )),
+                  const SizedBox(height:8),
+                  TextField(controller:controller,minLines:1,maxLines:3,decoration:const InputDecoration(labelText:'Или свой вариант',border:OutlineInputBorder())),
+                ]),
+              ),
+            ),
+            actions:[
+              TextButton(onPressed:()=>Navigator.pop(ctx,'Оставить как есть'),child:const Text('Оставить как есть')),
+              FilledButton(onPressed:()=>Navigator.pop(ctx,controller.text.trim().isNotEmpty?controller.text.trim():selected),child:const Text('Ответить')),
+            ],
+          );
+        }),
+      );
+      controller.dispose();
+      if(answer==null || answer.trim().isEmpty) return;
+      answers[q.id]=answer.trim();
+    }
+    if(answers.isEmpty) return;
+    setState(()=>busy=true);
+    try {
+      final result=scanPages.isNotEmpty
+          ? await ai.refineImages(scanPages,aiJson!,answers)
+          : await ai.refineText(text.text.trim(),aiJson!,answers);
+      final refined=TrainingTextParser.fromAiJson(result);
+      if(mounted){
+        setState((){aiJson=result;draft=refined;});
+        if(refined.clarifications.isNotEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) { if(mounted) clarifyResult(); });
+        }
+      }
+    } catch(e) {
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString())));
+    } finally {
+      if(mounted)setState(()=>busy=false);
+    }
   }
   Future<void> saveDraft() async {
     if(draft==null)return;
