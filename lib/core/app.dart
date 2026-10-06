@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/database.dart';
+import '../pages/program_editor_page.dart';
+import '../pages/import_program_page.dart';
 
 class MyWorkoutDiaryApp extends StatelessWidget {
   const MyWorkoutDiaryApp({super.key});
@@ -133,32 +135,70 @@ Widget _metric(String title, String value) => Card(
   ),
 );
 
-class ProgramPage extends StatelessWidget {
+class ProgramPage extends StatefulWidget {
   final AppDatabase db; final Future<void> Function(int) onStart;
-  const ProgramPage({super.key, required this.db, required this.onStart});
-  @override
-  Widget build(BuildContext context) => FutureBuilder<List<Map<String, dynamic>>>(
-    future: db.nextWorkouts(),
-    builder: (context, snap) {
-      final rows = snap.data ?? const <Map<String, dynamic>>[];
-      return ListView(
-        padding: const EdgeInsets.fromLTRB(16, 52, 16, 120),
-        children: [
-          Text('ПРОГРАММА', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800)),
-          const SizedBox(height: 12),
-          if (rows.isEmpty) const Card(child: ListTile(title: Text('Цикл завершён'))),
-          ...rows.map((r) => Card(child: ListTile(
-            title: Text('Неделя ${r['week_no']} • ${r['name']}'),
-            subtitle: Text('${r['cycle_name']} · ${r['status']}'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => onStart(r['id'] as int),
-          ))),
-        ],
-      );
+  const ProgramPage({super.key,required this.db,required this.onStart});
+  @override State<ProgramPage> createState()=>_ProgramPageState();
+}
+
+class _ProgramPageState extends State<ProgramPage> {
+  int selectedWeek=1;
+  Future<void> openEditor({int? cycleId}) async {
+    final id=await Navigator.push<int?>(context,MaterialPageRoute(builder:(_)=>ProgramEditorPage(db:widget.db,cycleId:cycleId)));
+    if(id!=null&&mounted)setState((){});
+  }
+  Future<void> openImport() async {
+    final id=await Navigator.push<int?>(context,MaterialPageRoute(builder:(_)=>ImportProgramPage(db:widget.db)));
+    if(id!=null&&mounted)setState((){});
+  }
+  @override Widget build(BuildContext context)=>FutureBuilder<List<Map<String,dynamic>>>(
+    future:widget.db.allCycles(),
+    builder:(context,s){
+      final cycles=s.data??const <Map<String,dynamic>>[];
+      return ListView(padding:const EdgeInsets.fromLTRB(16,52,16,120),children:[
+        Text('ПРОГРАММА',style:Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight:FontWeight.w800)),
+        const SizedBox(height:12),
+        Row(children:[
+          Expanded(child:FilledButton.icon(onPressed:()=>openEditor(),icon:const Icon(Icons.add),label:const Text('Новая программа'))),
+          const SizedBox(width:8),
+          Expanded(child:OutlinedButton.icon(onPressed:openImport,icon:const Icon(Icons.file_upload_outlined),label:const Text('Импорт'))),
+        ]),
+        const SizedBox(height:14),
+        if(cycles.isEmpty)const Card(child:ListTile(title:Text('Нет программ'))),
+        ...cycles.map((c)=>_CycleCard(db:widget.db,cycle:c,onEdit:()=>openEditor(cycleId:c['id'] as int),onStart:widget.onStart)),
+      ]);
     },
   );
 }
 
+class _CycleCard extends StatelessWidget {
+  final AppDatabase db; final Map<String,dynamic> cycle; final VoidCallback onEdit; final Future<void> Function(int) onStart;
+  const _CycleCard({required this.db,required this.cycle,required this.onEdit,required this.onStart});
+  @override Widget build(BuildContext context)=>Card(
+    margin:const EdgeInsets.only(bottom:12),
+    child:Padding(padding:const EdgeInsets.fromLTRB(14,12,14,6),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+      Row(children:[Expanded(child:Text((cycle['name']??'Цикл').toString(),style:const TextStyle(fontSize:20,fontWeight:FontWeight.w800))),IconButton(onPressed:onEdit,icon:const Icon(Icons.edit_outlined))]),
+      Text('Тренировочный цикл · '+(cycle['weeks']??1).toString()+' недель'),
+      const SizedBox(height:10),
+      FutureBuilder<List<Map<String,dynamic>>>(future:db.weeksForCycle(cycle['id'] as int),builder:(context,s){
+        final weeks=s.data??const <Map<String,dynamic>>[];
+        return Column(children:[
+          SizedBox(height:44,child:ListView.separated(scrollDirection:Axis.horizontal,itemCount:weeks.length,separatorBuilder:(_,__)=>const SizedBox(width:8),itemBuilder:(context,i)=>ChoiceChip(label:Text('Неделя '+weeks[i]['week_no'].toString()),selected:i==0,onSelected:(_){ }))),
+          ...weeks.map((w)=>_WeekPreview(db:db,week:w,onStart:onStart)),
+        ]);
+      }),
+    ])),
+  );
+}
+
+class _WeekPreview extends StatelessWidget {
+  final AppDatabase db; final Map<String,dynamic> week; final Future<void> Function(int) onStart;
+  const _WeekPreview({required this.db,required this.week,required this.onStart});
+  @override Widget build(BuildContext context)=>FutureBuilder<List<Map<String,dynamic>>>(future:db.daysForWeek(week['id'] as int),builder:(context,s){
+    final days=s.data??const <Map<String,dynamic>>[];
+    return Column(children:[...days.map((d)=>Card(color:const Color(0xFF111419),child:ListTile(title:Text((d['name']??'Тренировка').toString(),style:const TextStyle(fontWeight:FontWeight.w700)),subtitle:const Text('Открыть тренировку'),trailing:const Icon(Icons.play_circle_outline),onTap:()async{final rows=await db.db.query('workouts',where:'day_id=?',whereArgs:[d['id']],limit:1);if(rows.isNotEmpty)await onStart(rows.first['id'] as int);}))) ]);
+  });
+}
 class ActiveWorkoutPage extends StatefulWidget {
   final AppDatabase db; final int workoutId;
   const ActiveWorkoutPage({super.key, required this.db, required this.workoutId});
