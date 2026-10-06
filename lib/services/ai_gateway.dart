@@ -25,46 +25,74 @@ class AiGateway {
     'additionalProperties':false,
     'properties':{
       'name':{'type':'string'},
-      'weeks':{'type':'array','items':{
-        'type':'object','additionalProperties':false,
-        'properties':{
-          'number':{'type':'integer'},
-          'days':{'type':'array','items':{
-            'type':'object','additionalProperties':false,
-            'properties':{
-              'name':{'type':'string'},
-              'exercises':{'type':'array','items':{
-                'type':'object','additionalProperties':false,
+      'weeks':{
+        'type':'array',
+        'items':{
+          'type':'object',
+          'additionalProperties':false,
+          'properties':{
+            'number':{'type':'integer'},
+            'days':{
+              'type':'array',
+              'items':{
+                'type':'object',
+                'additionalProperties':false,
                 'properties':{
                   'name':{'type':'string'},
-                  'sets':{'type':'array','items':{
-                    'type':'object','additionalProperties':false,
-                    'properties':{
-                      'weight':{'anyOf':[{'type':'number'},{'type':'null'}]},
-                      'reps':{'anyOf':[{'type':'integer'},{'type':'null'}]},
-                      'percentage':{'anyOf':[{'type':'number'},{'type':'null'}]},
-                      'rpe':{'anyOf':[{'type':'number'},{'type':'null'}]},
-                      'rir':{'anyOf':[{'type':'number'},{'type':'null'}]},
-                      'scheme':{'type':'string'},
+                  'exercises':{
+                    'type':'array',
+                    'items':{
+                      'type':'object',
+                      'additionalProperties':false,
+                      'properties':{
+                        'name':{'type':'string'},
+                        'sets':{
+                          'type':'array',
+                          'items':{
+                            'type':'object',
+                            'additionalProperties':false,
+                            'properties':{
+                              'weight':{'anyOf':[{'type':'number'},{'type':'null'}]},
+                              'reps':{'anyOf':[{'type':'integer'},{'type':'null'}]},
+                              'percentage':{'anyOf':[{'type':'number'},{'type':'null'}]},
+                              'rpe':{'anyOf':[{'type':'number'},{'type':'null'}]},
+                              'rir':{'anyOf':[{'type':'number'},{'type':'null'}]},
+                              'scheme':{'type':'string'},
+                            },
+                            'required':['weight','reps','percentage','rpe','rir','scheme'],
+                          },
+                        },
+                      },
+                      'required':['name','sets'],
                     },
-                    'required':['weight','reps','percentage','rpe','rir','scheme'],
-                  }},
+                  },
                 },
-                'required':['name','sets'],
-              }},
+                'required':['name','exercises'],
+              },
             },
-            'required':['name','exercises'],
-          }},
+          },
+          'required':['number','days'],
         },
-        'required':['number','days'],
-      }},
+      },
       'warnings':{'type':'array','items':{'type':'string'}},
       'missing_data':{'type':'array','items':{'type':'string'}},
-      'clarifications':{'type':'array','items':{'type':'object','additionalProperties':false,'properties':{'id':{'type':'string'},'question':{'type':'string'},'context':{'type':'string'},'options':{'type':'array','items':{'type':'string'}}},'required':['id','question','context','options']}}},
+      'clarifications':{
+        'type':'array',
+        'items':{
+          'type':'object',
+          'additionalProperties':false,
+          'properties':{
+            'id':{'type':'string'},
+            'question':{'type':'string'},
+            'context':{'type':'string'},
+            'options':{'type':'array','items':{'type':'string'}},
+          },
+          'required':['id','question','context','options'],
+        },
+      },
     },
     'required':['name','weeks','warnings','missing_data','clarifications'],
   };
-
   Future<Map<String,dynamic>> analyzeText(String source) async {
     final instruction=_instruction() + '\n\nИСТОЧНИК:\n' + source;
     return _request([{ 'type':'input_text','text':instruction }]);
