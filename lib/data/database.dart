@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
+import 'dart:math';
 
 final databaseProvider = Provider<AppDatabase>(
   (_) => throw UnimplementedError(),
@@ -199,4 +200,157 @@ class AppDatabase {
         {'id': 1, ...data},
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
+  Future<List<Map<String, dynamic>>> allCycles() => db.query('cycles', orderBy: 'created_at DESC');
+
+  Future<Map<String, dynamic>?> getCycle(int id) async {
+    final rows = await db.query('cycles', where: 'id=?', whereArgs: [id], limit: 1);
+    return rows.isEmpty ? null : rows.first;
+  }
+
+  Future<List<Map<String, dynamic>>> weeksForCycle(int cycleId) =>
+      db.query('weeks', where: 'cycle_id=?', whereArgs: [cycleId], orderBy: 'week_no');
+
+  Future<List<Map<String, dynamic>>> daysForWeek(int weekId) =>
+      db.query('days', where: 'week_id=?', whereArgs: [weekId], orderBy: 'day_no');
+
+  Future<List<Map<String, dynamic>>> exercisesForWorkout(int workoutId) => db.rawQuery('''
+    SELECT we.id workout_exercise_id, we.sort_no, e.id exercise_id, e.name exercise_name
+    FROM workout_exercises we
+    JOIN exercises e ON e.id=we.exercise_id
+    WHERE we.workout_id=? ORDER BY we.sort_no
+  ''', [workoutId]);
+
+  Future<List<Map<String, dynamic>>> setsForWorkoutExercise(int workoutExerciseId) =>
+      db.query('planned_sets', where: 'workout_exercise_id=?', whereArgs: [workoutExerciseId], orderBy: 'set_no');
+
+  Future<int> createCycle(String name, {int weeks = 1}) async {
+    final id = await db.insert('cycles', {
+      'name': name.trim().isEmpty ? 'Новый тренировочный цикл' : name.trim(),
+      'weeks': max(1, weeks),
+      'created_at': DateTime.now().toIso8601String(),
+    });
+    for (var i = 1; i <= max(1, weeks); i++) {
+      final weekId = await db.insert('weeks', {'cycle_id': id, 'week_no': i});
+      final dayId = await db.insert('days', {'week_id': weekId, 'day_no': 1, 'name': 'Тренировка 1'});
+      await db.insert('workouts', {'day_id': dayId, 'cycle_id': id});
+    }
+    return id;
+  }
+
+  Future<void> updateCycle(int id, String name, int weeks) async {
+    await db.update('cycles', {'name': name.trim(), 'weeks': weeks}, where: 'id=?', whereArgs: [id]);
+  }
+
+  Future<int> addWeek(int cycleId) async {
+    final rows = await weeksForCycle(cycleId);
+    final next = rows.isEmpty ? 1 : (rows.last['week_no'] as int) + 1;
+    final weekId = await db.insert('weeks', {'cycle_id': cycleId, 'week_no': next});
+    final dayId = await db.insert('days', {'week_id': weekId, 'day_no': 1, 'name': 'Тренировка 1'});
+    await db.insert('workouts', {'day_id': dayId, 'cycle_id': cycleId});
+    await db.update('cycles', {'weeks': next}, where: 'id=?', whereArgs: [cycleId]);
+    return weekId;
+  }
+
+  Future<void> updateDay(int id, String name) => db.update(
+        'days', {'name': name.trim().isEmpty ? 'Тренировка' : name.trim()},
+        where: 'id=?', whereArgs: [id]);
+
+  Future<int> addDay(int weekId) async {
+    final rows = await daysForWeek(weekId);
+    final next = rows.length + 1;
+    final week = await db.query('weeks', where: 'id=?', whereArgs: [weekId], limit: 1);
+    final cycleId = week.isEmpty ? null : week.first['cycle_id'];
+    final dayId = await db.insert('days', {'week_id': weekId, 'day_no': next, 'name': 'Тренировка ' + next.toString()});
+    await db.insert('workouts', {'day_id': dayId, 'cycle_id': cycleId});
+    return dayId;
+  }
+
+  Future<int> _workoutForDay(int dayId) async {
+    final rows = await db.query('workouts', where: 'day_id=?', whereArgs: [dayId], limit: 1);
+    if (rows.isNotEmpty) return rows.first['id'] as int;
+    final day = await db.query('days', where: 'id=?', whereArgs: [dayId], limit: 1);
+    if (day.isEmpty) throw StateError('День не найден');
+    final week = await db.query('weeks', where: 'id=?', whereArgs: [day.first['week_id']], limit: 1);
+    final cycleId = week.isEmpty ? null : week.first['cycle_id'];
+    return db.insert('workouts', {'day_id': dayId, 'cycle_id': cycleId});
+  }
+
+  Future<int> addExerciseToDay(int dayId, String exerciseName) async {
+    final workoutId = await _workoutForDay(dayId);
+    final existing = await db.query('exercises', where: 'LOWER(name)=LOWER(?)', whereArgs: [exerciseName.trim()], limit: 1);
+    final exerciseId = existing.isNotEmpty
+        ? existing.first['id'] as int
+        : await db.insert('exercises', {'name': exerciseName.trim(), 'category': 'Другое'});
+    final current = await db.query('workout_exercises', where: 'workout_id=? AND exercise_id=?', whereArgs: [workoutId, exerciseId], limit: 1);
+    if (current.isNotEmpty) return current.first['id'] as int;
+    final count = Sqflite.firstIntValue(await db.rawQuery(
+      'SELECT COUNT(*) FROM workout_exercises WHERE workout_id=?', [workoutId])) ?? 0;
+    return db.insert('workout_exercises', {
+      'workout_id': workoutId, 'exercise_id': exerciseId, 'sort_no': count,
+    });
+  }
+
+  Future<void> renameExercise(int exerciseId, String name) =>
+      db.update('exercises', {'name': name.trim()}, where: 'id=?', whereArgs: [exerciseId]);
+
+  Future<void> addPlannedSet(int workoutExerciseId, {double? weight, int? reps}) async {
+    final rows = await setsForWorkoutExercise(workoutExerciseId);
+    final next = rows.length + 1;
+    await db.insert('planned_sets', {
+      'workout_exercise_id': workoutExerciseId,
+      'set_no': next,
+      'weight': weight,
+      'reps': reps ?? 5,
+    });
+  }
+
+  Future<void> updatePlannedSet(int id, {double? weight, int? reps, double? rpe, double? rir}) =>
+      db.update('planned_sets', {
+        'weight': weight, 'reps': reps ?? 0, 'rpe': rpe, 'rir': rir,
+      }, where: 'id=?', whereArgs: [id]);
+
+  Future<void> deletePlannedSet(int id) => db.delete('planned_sets', where: 'id=?', whereArgs: [id]);
+
+  Future<void> deleteWorkoutExercise(int id) async {
+    await db.delete('planned_sets', where: 'workout_exercise_id=?', whereArgs: [id]);
+    await db.delete('workout_exercises', where: 'id=?', whereArgs: [id]);
+  }
+
+  Future<int> saveImportedProgram(dynamic draft) async {
+    final id = await createCycle(draft.name, weeks: draft.weeks.length);
+    for (var wi = 0; wi < draft.weeks.length; wi++) {
+      final sourceWeek = draft.weeks[wi];
+      final weekRows = await weeksForCycle(id);
+      int weekId = weekRows.isNotEmpty && wi < weekRows.length
+          ? weekRows[wi]['id'] as int
+          : await addWeek(id);
+      for (var di = 0; di < sourceWeek.days.length; di++) {
+        final sourceDay = sourceWeek.days[di];
+        var dayRows = await daysForWeek(weekId);
+        int dayId;
+        if (di < dayRows.length) {
+          dayId = dayRows[di]['id'] as int;
+          await updateDay(dayId, sourceDay.name);
+        } else {
+          dayId = await addDay(weekId);
+          await updateDay(dayId, sourceDay.name);
+        }
+        for (final sourceExercise in sourceDay.exercises) {
+          final weId = await addExerciseToDay(dayId, sourceExercise.name);
+          for (final sourceSet in sourceExercise.sets) {
+            await addPlannedSet(weId, weight: sourceSet.weight, reps: sourceSet.reps);
+            final all = await setsForWorkoutExercise(weId);
+            if (all.isNotEmpty && (sourceSet.percentage != null || sourceSet.rpe != null || sourceSet.rir != null)) {
+              final last = all.last;
+              await updatePlannedSet(last['id'] as int,
+                weight: sourceSet.weight, reps: sourceSet.reps,
+                rpe: sourceSet.rpe, rir: sourceSet.rir);
+            }
+          }
+        }
+      }
+    }
+    return id;
+  }
+
 }
