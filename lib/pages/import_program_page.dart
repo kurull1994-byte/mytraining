@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -23,7 +22,7 @@ class _ImportProgramPageState extends State<ImportProgramPage> {
       if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('В буфере нет текста')));
       return;
     }
-    text.text=data!.text!; parseText();
+    text.text=data!.text; parseText();
   }
 
   void parseText(){
