@@ -221,8 +221,6 @@ class AppDatabase {
       );
   Future<List<Map<String, dynamic>>> allCycles() => db.query('cycles', orderBy: 'created_at DESC');
 
-  Future<List<Map<String, dynamic>>> allCycles() => db.query('cycles', orderBy: 'created_at DESC');
-
   Future<int?> activeCycleId() async {
     final rows = await db.query('app_settings', where: 'key=?', whereArgs: ['active_cycle_id'], limit: 1);
     final value = rows.isEmpty ? null : rows.first['value'];
