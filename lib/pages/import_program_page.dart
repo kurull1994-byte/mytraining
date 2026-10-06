@@ -134,7 +134,7 @@ class _ImportProgramPageState extends State<ImportProgramPage> {
         FilledButton.icon(onPressed:pasteClipboard,icon:const Icon(Icons.content_paste),label:const Text('Вставить из буфера')),
         OutlinedButton.icon(onPressed:busy?null:pickFile,icon:const Icon(Icons.attach_file),label:const Text('Excel / Word / TXT')),
         OutlinedButton.icon(onPressed: busy ? null : () => takePhoto(ImageSource.camera),icon:const Icon(Icons.photo_camera_outlined),label:const Text('Сканировать')),
-        OutlinedButton.icon(onPressed: busy ? null : () => takePhoto(ImageSource.gallery),icon:const Icon(Icons.photo_library_outlined),label:const Text('Фото из галереи')),
+        OutlinedButton.icon(onPressed: busy ? null : pickScanPages,icon:const Icon(Icons.collections_outlined),label:const Text('Несколько фото')),
       ]),
       const SizedBox(height:16),
       if(imageBytes!=null)Card(
