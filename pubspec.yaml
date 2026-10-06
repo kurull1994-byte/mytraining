@@ -1,7 +1,7 @@
 name: my_workout_diary
 description: Offline-first strength training diary.
 publish_to: 'none'
-version: 0.1.0+1
+version: 0.2.0+2
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -13,6 +13,11 @@ dependencies:
   sqflite: ^2.3.3+1
   path: ^1.9.0
   flutter_riverpod: ^2.5.1
+  file_picker: ^8.3.7
+  image_picker: ^1.1.2
+  spreadsheet_decoder: ^2.3.0
+  archive: ^4.0.7
+  xml: ^6.6.1
 
 dev_dependencies:
   flutter_test:
