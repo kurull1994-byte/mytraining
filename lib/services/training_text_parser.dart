@@ -182,4 +182,45 @@ class TrainingTextParser {
       weeks: weeks, warnings: warnings, missingData: missing,
     );
   }
+
+  static DraftProgram fromAiJson(Map<String, dynamic> json) {
+    final weeks = <DraftWeek>[];
+    final rawWeeks = (json['weeks'] as List?) ?? const [];
+    for (final rawWeek in rawWeeks) {
+      final w = Map<String, dynamic>.from(rawWeek as Map);
+      final days = <DraftDay>[];
+      final rawDays = (w['days'] as List?) ?? const [];
+      for (final rawDay in rawDays) {
+        final d = Map<String, dynamic>.from(rawDay as Map);
+        final exercises = <DraftExercise>[];
+        final rawExercises = (d['exercises'] as List?) ?? const [];
+        for (final rawExercise in rawExercises) {
+          final e = Map<String, dynamic>.from(rawExercise as Map);
+          final sets = <DraftSet>[];
+          final rawSets = (e['sets'] as List?) ?? const [];
+          for (final rawSet in rawSets) {
+            final s = Map<String, dynamic>.from(rawSet as Map);
+            sets.add(DraftSet(
+              weight: (s['weight'] as num?)?.toDouble(),
+              reps: (s['reps'] as num?)?.toInt(),
+              percentage: (s['percentage'] as num?)?.toDouble(),
+              rpe: (s['rpe'] as num?)?.toDouble(),
+              rir: (s['rir'] as num?)?.toDouble(),
+              scheme: (s['scheme'] ?? '').toString(),
+            ));
+          }
+          exercises.add(DraftExercise((e['name'] ?? 'Неизвестное упражнение').toString(), sets));
+        }
+        days.add(DraftDay((d['name'] ?? 'Тренировка').toString(), exercises));
+      }
+      weeks.add(DraftWeek((w['number'] as num?)?.toInt() ?? weeks.length + 1, days));
+    }
+    return DraftProgram(
+      name: (json['name'] ?? 'AI программа').toString(),
+      weeks: weeks.isEmpty ? [DraftWeek(1, [DraftDay('Тренировка 1', [])])] : weeks,
+      warnings: (json['warnings'] as List? ?? const []).map((e) => e.toString()).toList(),
+      missingData: (json['missing_data'] as List? ?? const []).map((e) => e.toString()).toList(),
+    );
+  }
+
 }
