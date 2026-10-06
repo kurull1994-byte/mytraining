@@ -143,7 +143,7 @@ class TrainingTextParser {
     for(final entry in sections.entries) {
       for(final line in entry.value) {
         final matches=cell.allMatches(line).toList();
-        if(matches.length<7) continue;
+        if(matches.length<8) continue;
         final prefix=line.substring(0,matches.first.start).trim();
         if(prefix.isEmpty || RegExp(r'^(упражнение|exercise|нед)',caseSensitive:false).hasMatch(prefix)) continue;
         final exerciseName=clean(prefix.replaceAll(RegExp(r'[-:]\\s*$'),'')).trim();
@@ -168,7 +168,8 @@ class TrainingTextParser {
         }
 
         for(var wi=0;wi<8;wi++) {
-          var day=weeks[wi].days.cast<DraftDay?>().where((d)=>d!.name==entry.key).firstOrNull;
+          DraftDay? day;
+          for(final candidate in weeks[wi].days) { if(candidate.name==entry.key) { day=candidate; break; } }
           if(day==null) {
             day=DraftDay(entry.key,[]);
             weeks[wi].days.add(day);
