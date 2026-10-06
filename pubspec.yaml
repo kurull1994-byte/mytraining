@@ -13,14 +13,11 @@ dependencies:
   sqflite: ^2.3.3+1
   path: ^1.9.0
   flutter_riverpod: ^2.5.1
-  file_picker: ^8.3.7
-  image_picker: ^1.1.2
+  file_picker: ^13.1.0
+  image_picker: ^1.2.4
   spreadsheet_decoder: ^2.3.0
   archive: ^3.6.1
   xml: ^6.6.1
-
-dependency_overrides:
-  flutter_plugin_android_lifecycle: 2.0.18
 
 dev_dependencies:
   flutter_test:
