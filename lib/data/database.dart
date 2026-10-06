@@ -13,7 +13,7 @@ class AppDatabase {
   Future<void> init() async {
     db = await openDatabase(
       join(await getDatabasesPath(), 'my_workout_diary.db'),
-      version: 3,
+      version: 4,
       onCreate: (d, _) => _createSchema(d),
       onUpgrade: (d, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -22,9 +22,17 @@ class AppDatabase {
         if (oldVersion < 3) {
           await d.execute('ALTER TABLE planned_sets ADD COLUMN scheme TEXT');
         }
+        if (oldVersion < 4) {
+          await d.execute('CREATE TABLE app_settings(key TEXT PRIMARY KEY,value TEXT)');
+        }
       },
     );
     await createDemoCycleIfNeeded();
+    final active = await activeCycleId();
+    if (active == null) {
+      final cycles = await allCycles();
+      if (cycles.isNotEmpty) await setActiveCycleId(cycles.first['id'] as int);
+    }
   }
 
   Future<void> _createSchema(Database d) async {
@@ -37,6 +45,7 @@ class AppDatabase {
     await d.execute('CREATE TABLE planned_sets(id INTEGER PRIMARY KEY AUTOINCREMENT,workout_exercise_id INTEGER,set_no INTEGER,weight REAL,reps INTEGER,percentage REAL,rpe REAL,rir REAL,scheme TEXT)');
     await d.execute('CREATE TABLE actual_sets(id INTEGER PRIMARY KEY AUTOINCREMENT,planned_set_id INTEGER,weight REAL,reps INTEGER,created_at TEXT NOT NULL)');
     await d.execute('CREATE TABLE user_profile(id INTEGER PRIMARY KEY CHECK(id=1),name TEXT,age INTEGER,sex TEXT,height REAL,weight REAL,experience TEXT,specialization TEXT,goals TEXT)');
+    await d.execute('CREATE TABLE app_settings(key TEXT PRIMARY KEY,value TEXT)');
   }
 
   Future<void> createDemoCycleIfNeeded() async {
@@ -79,15 +88,16 @@ class AppDatabase {
     }
   }
 
-  Future<List<Map<String, dynamic>>> nextWorkouts() => db.rawQuery('''
-    SELECT w.id,w.status,d.name,wk.week_no,d.day_no,c.name cycle_name
+  Future<List<Map<String, dynamic>>> nextWorkouts({int? cycleId}) => db.rawQuery('''
+    SELECT w.id,w.status,d.name,wk.week_no,d.day_no,c.name cycle_name,c.id cycle_id
     FROM workouts w
     JOIN days d ON d.id=w.day_id
     JOIN weeks wk ON wk.id=d.week_id
     JOIN cycles c ON c.id=wk.cycle_id
     WHERE w.status IN ("planned","in_progress")
+      ${cycleId == null ? '' : 'AND c.id = ?'}
     ORDER BY wk.week_no,d.day_no LIMIT 30
-  ''');
+  ''', cycleId == null ? null : [cycleId]);
 
   Future<List<Map<String, dynamic>>> workoutSets(int workoutId) => db.rawQuery('''
     SELECT ps.id set_id,ps.set_no,ps.weight planned_weight,ps.reps planned_reps,ps.percentage planned_percentage,
@@ -210,6 +220,68 @@ class AppDatabase {
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
   Future<List<Map<String, dynamic>>> allCycles() => db.query('cycles', orderBy: 'created_at DESC');
+
+  Future<List<Map<String, dynamic>>> allCycles() => db.query('cycles', orderBy: 'created_at DESC');
+
+  Future<int?> activeCycleId() async {
+    final rows = await db.query('app_settings', where: 'key=?', whereArgs: ['active_cycle_id'], limit: 1);
+    final value = rows.isEmpty ? null : rows.first['value'];
+    return value == null ? null : int.tryParse(value.toString());
+  }
+
+  Future<void> setActiveCycleId(int? cycleId) async {
+    if (cycleId == null) {
+      await db.delete('app_settings', where: 'key=?', whereArgs: ['active_cycle_id']);
+      return;
+    }
+    await db.insert(
+      'app_settings',
+      {'key': 'active_cycle_id', 'value': cycleId.toString()},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<void> deleteCycle(int cycleId) async {
+    await db.transaction((tx) async {
+      final workouts = await tx.rawQuery('SELECT id FROM workouts WHERE cycle_id=?', [cycleId]);
+      final workoutIds = workouts.map((r) => r['id'] as int).toList();
+      if (workoutIds.isNotEmpty) {
+        final wp = List.filled(workoutIds.length, '?').join(',');
+        final workoutExercises = await tx.rawQuery(
+          'SELECT id FROM workout_exercises WHERE workout_id IN ($wp)',
+          workoutIds,
+        );
+        final weIds = workoutExercises.map((r) => r['id'] as int).toList();
+        if (weIds.isNotEmpty) {
+          final ep = List.filled(weIds.length, '?').join(',');
+          await tx.delete('actual_sets',
+              where: 'planned_set_id IN (SELECT id FROM planned_sets WHERE workout_exercise_id IN ($ep))',
+              whereArgs: weIds);
+          await tx.delete('planned_sets',
+              where: 'workout_exercise_id IN ($ep)', whereArgs: weIds);
+          await tx.delete('workout_exercises',
+              where: 'id IN ($ep)', whereArgs: weIds);
+        }
+        await tx.delete('workouts', where: 'id IN ($wp)', whereArgs: workoutIds);
+      }
+      final weeks = await tx.query('weeks', columns: ['id'], where: 'cycle_id=?', whereArgs: [cycleId]);
+      final weekIds = weeks.map((r) => r['id'] as int).toList();
+      if (weekIds.isNotEmpty) {
+        final dp = List.filled(weekIds.length, '?').join(',');
+        await tx.delete('days', where: 'week_id IN ($dp)', whereArgs: weekIds);
+        await tx.delete('weeks', where: 'id IN ($dp)', whereArgs: weekIds);
+      }
+      await tx.delete('cycles', where: 'id=?', whereArgs: [cycleId]);
+      await tx.delete('app_settings',
+          where: 'key=? AND value=?',
+          whereArgs: ['active_cycle_id', cycleId.toString()]);
+    });
+
+    if (await activeCycleId() == null) {
+      final cycles = await allCycles();
+      if (cycles.isNotEmpty) await setActiveCycleId(cycles.first['id'] as int);
+    }
+  }
 
   Future<Map<String, dynamic>?> getCycle(int id) async {
     final rows = await db.query('cycles', where: 'id=?', whereArgs: [id], limit: 1);
