@@ -52,14 +52,29 @@ class TrainingTextParser {
   static final _rpeRe=RegExp(r'\bRPE\s*(?:=|:)?\s*(\d+(?:[.,]\d+)?)',caseSensitive:false);
   static final _rirRe=RegExp(r'\bRIR\s*(?:=|:)?\s*(\d+(?:[.,]\d+)?)',caseSensitive:false);
 
+  static final _matrixCell=RegExp(
+    r'(\d+(?:[.,]\d+)?)\s*[xх×]\s*(\d+|amrap)(?:\s*(с|сек|секунд|s))?\s*(?:,\s*(\d+))?',
+    caseSensitive:false,
+  );
+
   static DraftProgram parse(String source,{String? name}) {
-    final matrix=_parseMatrix(source,name:name);
-    return matrix ?? _parseLineBased(source,name:name);
+    return _parseMatrix(source,name:name) ?? _parseLineBased(source,name:name);
+  }
+
+  static String? _weekdayName(String line) {
+    final names=['понедельник','вторник','среда','четверг','пятница','суббота','воскресенье'];
+    final lower=line.toLowerCase();
+    for(final name in names) {
+      if(!lower.startsWith(name)) continue;
+      if(lower.length==name.length) return line;
+      final next=lower.codeUnitAt(name.length);
+      final isSeparator=next==32 || next==9 || next==58 || next==45 || next==40;
+      if(isSeparator) return line;
+    }
+    return null;
   }
 
   static DraftProgram? _parseMatrix(String source,{String? name}) {
-    final weekday=RegExp(r'^\s*(понедельник|вторник|среда|четверг|пятница|суббота|воскресенье)(?![A-Za-zА-Яа-яЁё0-9_])\s*(.*)$',caseSensitive:false);
-    final cell=RegExp(r'(\d+(?:[.,]\d+)?)\s*[xх×]\s*(\d+|amrap)(?:\s*(с|сек|секунд|s))?\s*(?:,\s*(\d+))?',caseSensitive:false);
     final sections=<String,List<String>>{};
     String? currentDay;
     String clean(String s)=>s.replaceAll(RegExp(r'\s+'),' ').trim();
@@ -67,45 +82,42 @@ class TrainingTextParser {
     for(final raw in source.split(RegExp(r'\r?\n'))) {
       final line=clean(raw);
       if(line.isEmpty) continue;
-      final dm=weekday.firstMatch(line);
-      if(dm!=null) {
-        final dayName=clean((dm.group(1)??'Тренировка')+((dm.group(2)??'').trim().isEmpty?'':' '+dm.group(2)!.trim()));
-        currentDay=dayName;
-        sections[dayName]=[];
-      } else if(currentDay!=null) {
-        sections[currentDay]!.add(line);
+      final day=_weekdayName(line);
+      if(day!=null) {
+        currentDay=day;
+        sections[day]=[];
+        continue;
       }
+      if(currentDay!=null) sections[currentDay]!.add(line);
     }
 
     if(sections.length<2) return null;
     final weeks=List.generate(8,(i)=>DraftWeek(i+1,[]));
     final warnings=<String>[];
     final missing=<String>[];
-    var exerciseRows=0;
+    var rowCount=0;
 
     for(final entry in sections.entries) {
       for(final line in entry.value) {
-        final matches=cell.allMatches(line).toList();
-        if(matches.length!=8) continue;
+        final matches=_matrixCell.allMatches(line).toList();
+        if(matches.length<8) continue;
         final prefix=line.substring(0,matches.first.start).trim();
-        if(prefix.isEmpty || RegExp(r'^(упражнение|exercise|нед)',caseSensitive:false).hasMatch(prefix)) continue;
+        if(prefix.isEmpty || RegExp(r'^(упражнение|exercise)',caseSensitive:false).hasMatch(prefix)) continue;
         final exerciseName=clean(prefix.replaceAll(RegExp(r'[-:]\s*$'),'')).trim();
         if(exerciseName.isEmpty) continue;
 
         final perWeek=<List<DraftSet>>[];
-        for(final m in matches) {
-          final first=double.tryParse(m.group(1)!.replaceAll(',','.'));
-          final repToken=m.group(2)!;
-          final amrap=repToken.toLowerCase()=='amrap';
-          final reps=amrap?null:int.tryParse(repToken);
-          final explicitCount=int.tryParse(m.group(4)??'');
-          final setCount=(explicitCount ?? first?.toInt() ?? 1).clamp(1,20).toInt();
-          final hasWeight=explicitCount!=null;
-          final weight=hasWeight?first:null;
-          final seconds=(m.group(3)??'').trim().isNotEmpty;
-          final scheme=seconds ? setCount.toString()+'×'+(reps?.toString()??'')+' сек' : (amrap?'AMRAP':setCount.toString()+' подходов');
+        for(final match in matches.take(8)) {
+          final first=double.tryParse(match.group(1)!.replaceAll(',','.'));
+          final repsToken=match.group(2)!;
+          final isAmrap=repsToken.toLowerCase()=='amrap';
+          final reps=isAmrap?null:int.tryParse(repsToken);
+          final explicitCount=int.tryParse(match.group(4)??'');
+          final setCount=(explicitCount ?? (first?.toInt() ?? 1)).clamp(1,20).toInt();
+          final weight=explicitCount==null?null:first;
+          final seconds=(match.group(3)??'').trim().isNotEmpty;
+          final scheme=isAmrap?'AMRAP':(seconds?setCount.toString()+'×'+(reps?.toString()??'')+' сек':setCount.toString()+' подходов');
           perWeek.add(List.generate(setCount,(_)=>DraftSet(weight:weight,reps:reps,scheme:scheme)));
-          if(hasWeight==false && !amrap && !seconds) missing.add(exerciseName+': вес не указан на одной из недель');
         }
 
         for(var wi=0;wi<8;wi++) {
@@ -119,11 +131,12 @@ class TrainingTextParser {
           }
           day.exercises.add(DraftExercise(exerciseName,perWeek[wi]));
         }
-        exerciseRows++;
+        rowCount++;
       }
     }
 
-    if(exerciseRows<10) return null;
+    if(rowCount<3) return null;
+    if(rowCount<10) warnings.add('В таблице распознано упражнений: '+rowCount.toString()+'. Проверьте пропущенные строки.');
     final detected=RegExp(r'\d+\s*[-–]?\s*недельн\S*\s*цикл',caseSensitive:false).firstMatch(source)?.group(0);
     return DraftProgram(name:name?.trim().isNotEmpty==true?name!.trim():(detected??'8-недельный силовой цикл'),weeks:weeks,warnings:warnings,missingData:missing);
   }
@@ -162,7 +175,11 @@ class TrainingTextParser {
       }
       ensureDay();
       final sm=_setsRe.firstMatch(line);
-      if(sm==null){warnings.add('Не распознана схема подходов: «'+line+'»');currentDay.exercises.add(DraftExercise(line,const []));continue;}
+      if(sm==null){
+        warnings.add('Не распознана схема подходов: «'+line+'»');
+        currentDay.exercises.add(DraftExercise(line,const []));
+        continue;
+      }
       final count=int.tryParse(sm.group(1)!)??1;
       final repsToken=sm.group(2)!;
       final reps=repsToken.toLowerCase()=='amrap'?null:int.tryParse(repsToken);
@@ -174,8 +191,7 @@ class TrainingTextParser {
       final pct=pm==null?null:double.tryParse(pm.group(1)!.replaceAll(',','.'));
       final rpe=rm==null?null:double.tryParse(rm.group(1)!.replaceAll(',','.'));
       final rir=rim==null?null:double.tryParse(rim.group(1)!.replaceAll(',','.'));
-      var exerciseName=line.substring(0,sm.start).trim();
-      exerciseName=exerciseName.replaceAll(_weightRe,'').replaceAll(RegExp(r'[-:]\s*$'),'').trim();
+      var exerciseName=line.substring(0,sm.start).trim().replaceAll(_weightRe,'').replaceAll(RegExp(r'[-:]\s*$'),'').trim();
       if(exerciseName.isEmpty){exerciseName='Неизвестное упражнение';warnings.add('Не удалось определить упражнение: «'+line+'»');}
       final draftSets=List.generate(count,(_)=>DraftSet(weight:weight,reps:reps,percentage:pct,rpe:rpe,rir:rir,scheme:reps==null?'AMRAP':count.toString()+'×'+reps.toString()));
       final existing=currentDay.exercises.indexWhere((e)=>e.name.toLowerCase()==exerciseName.toLowerCase());
