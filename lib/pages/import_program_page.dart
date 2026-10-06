@@ -35,9 +35,10 @@ class _ImportProgramPageState extends State<ImportProgramPage> {
   Future<void> pickFile() async {
     setState(()=>busy=true);
     try {
-      final result=await FilePicker.platform.pickFiles(withData:true,type:FileType.custom,allowedExtensions:['txt','csv','xlsx','docx']);
-      if(result==null||result.files.single.bytes==null)return;
-      final file=result.files.single; final bytes=file.bytes!; final ext=(file.extension??'').toLowerCase();
+      final file=await FilePicker.pickFile(type:FileType.custom,allowedExtensions:['txt','csv','xlsx','docx']);
+      if(file==null)return;
+      final bytes=await file.readAsBytes();
+      final ext=(file.extension??'').toLowerCase();
       String extracted;
       if(ext=='xlsx')extracted=ProgramSourceReader.fromSpreadsheet(bytes);
       else if(ext=='docx')extracted=ProgramSourceReader.fromDocx(bytes);
