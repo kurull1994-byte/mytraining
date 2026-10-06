@@ -14,7 +14,7 @@ class MyWorkoutDiaryApp extends StatelessWidget {
       colorSchemeSeed: Colors.orange,
       useMaterial3: true,
       scaffoldBackgroundColor: const Color(0xFF0D0F12),
-      cardTheme: const CardTheme(color: Color(0xFF181B21)),
+      cardTheme: const CardThemeData(color: Color(0xFF181B21)),
     ),
     home: const Shell(),
   );
