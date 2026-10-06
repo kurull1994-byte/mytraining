@@ -70,12 +70,33 @@ class AiGateway {
   }
 
   Future<Map<String,dynamic>> analyzeImage(Uint8List bytes,{String mimeType='image/jpeg'}) async {
-    final b64=base64Encode(bytes);
-    final prompt=_instruction() + '\n\nЭто фотография программы тренировок. Прочитай все видимые строки и таблицы. Не придумывай отсутствующие значения.';
-    return _request([
-      {'type':'input_text','text':prompt},
-      {'type':'input_image','detail':'high','image_url':'data:' + mimeType + ';base64,' + b64},
-    ]);
+    return analyzeImages([bytes], mimeTypes:[mimeType]);
+  }
+
+  Future<Map<String,dynamic>> analyzeImages(
+    List<Uint8List> images, {
+    List<String>? mimeTypes,
+  }) async {
+    if (images.isEmpty) throw StateError('Нет изображений для распознавания.');
+    if (images.length > 4) throw StateError('За один раз можно распознать не более 4 страниц.');
+    final content=<Map<String,dynamic>>[
+      {
+        'type':'input_text',
+        'text':_instruction() +
+            '\n\nЭто одна или несколько фотографий страниц программы тренировок. ' +
+            'Прочитай все видимые строки и таблицы. Объедини страницы в одну программу, ' +
+            'сохраняя порядок страниц. Не придумывай отсутствующие значения.',
+      },
+    ];
+    for (var i=0;i<images.length;i++) {
+      final mime=(mimeTypes!=null && i<mimeTypes.length) ? mimeTypes[i] : 'image/jpeg';
+      content.add({
+        'type':'input_image',
+        'detail':'high',
+        'image_url':'data:' + mime + ';base64,' + base64Encode(images[i]),
+      });
+    }
+    return _request(content);
   }
 
   String _instruction() => '''Ты — модуль структурированного импорта программ силовых тренировок. Преобразуй источник в точную структуру программы.
