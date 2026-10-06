@@ -127,8 +127,9 @@ class TrainingTextParser {
       if(line.isEmpty) continue;
       final dm=weekday.firstMatch(line);
       if(dm!=null) {
-        currentDay=clean((dm.group(1)??'Тренировка')+((dm.group(2)??'').isEmpty?'':' '+dm.group(2)!.trim()));
-        sections[currentDay!]=[];
+        final dayName=clean((dm.group(1)??'Тренировка')+((dm.group(2)??'').isEmpty?'':' '+dm.group(2)!.trim()));
+        currentDay=dayName;
+        sections[dayName]=[];
         continue;
       }
       if(currentDay!=null) sections[currentDay]!.add(line);
