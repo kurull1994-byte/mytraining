@@ -116,13 +116,13 @@ class TrainingTextParser {
   }
 
   static DraftProgram? _parseMatrix(String source,{String? name}) {
-    final weekday=RegExp(r'^\\s*(понедельник|вторник|среда|четверг|пятница|суббота|воскресенье)\\b\\s*(.*)$',caseSensitive:false);
-    final cell=RegExp(r'(\\d+(?:[.,]\\d+)?)\\s*[xх×]\\s*(\\d+|amrap)(?:\\s*(с|сек|секунд|s))?\\s*(?:,\\s*(\\d+))?',caseSensitive:false);
+    final weekday=RegExp(r'^\s*(понедельник|вторник|среда|четверг|пятница|суббота|воскресенье)\b\s*(.*)$',caseSensitive:false);
+    final cell=RegExp(r'(\d+(?:[.,]\d+)?)\s*[xх×]\s*(\d+|amrap)(?:\s*(с|сек|секунд|s))?\s*(?:,\s*(\d+))?',caseSensitive:false);
     final sections=<String,List<String>>{};
     String? currentDay;
-    String clean(String s)=>s.replaceAll(RegExp(r'\\s+'),' ').trim();
+    String clean(String s)=>s.replaceAll(RegExp(r'\s+'),' ').trim();
 
-    for(final raw in source.split(RegExp(r'\\r?\\n'))) {
+    for(final raw in source.split(RegExp(r'\r?\n'))) {
       final line=clean(raw);
       if(line.isEmpty) continue;
       final dm=weekday.firstMatch(line);
@@ -147,7 +147,7 @@ class TrainingTextParser {
         if(matches.length<8) continue;
         final prefix=line.substring(0,matches.first.start).trim();
         if(prefix.isEmpty || RegExp(r'^(упражнение|exercise|нед)',caseSensitive:false).hasMatch(prefix)) continue;
-        final exerciseName=clean(prefix.replaceAll(RegExp(r'[-:]\\s*$'),'')).trim();
+        final exerciseName=clean(prefix.replaceAll(RegExp(r'[-:]\s*$'),'')).trim();
         if(exerciseName.isEmpty) continue;
         final cells=matches.take(8).toList();
         if(cells.length<8) { warnings.add(exerciseName+': найдено '+cells.length.toString()+' из 8 недель'); continue; }
@@ -182,7 +182,7 @@ class TrainingTextParser {
     }
 
     if(rows<10) return null;
-    final detected=RegExp(r'\\d+\\s*[-–]?\\s*недельн\\S*\\s*цикл',caseSensitive:false).firstMatch(source)?.group(0);
+    final detected=RegExp(r'\d+\s*[-–]?\s*недельн\S*\s*цикл',caseSensitive:false).firstMatch(source)?.group(0);
     return DraftProgram(
       name:name?.trim().isNotEmpty==true?name!.trim():(detected??'8-недельный силовой цикл'),
       weeks:weeks,
@@ -201,13 +201,13 @@ class TrainingTextParser {
     void flushDay(){if(currentDay.exercises.isNotEmpty&&!currentWeek.days.contains(currentDay))currentWeek.days.add(currentDay);}
     void flushWeek(){flushDay();if(currentWeek.days.isNotEmpty)weeks.add(currentWeek);}
     void ensureDay(){if(currentWeek.days.isEmpty&&currentDay.exercises.isEmpty){currentDay=DraftDay('Тренировка '+dayCounter.toString(),[]);dayCounter++;}}
-    for(final raw in source.split(RegExp(r'\\r?\\n'))) {
+    for(final raw in source.split(RegExp(r'\r?\n'))) {
       final line=raw.trim();
       if(line.isEmpty) continue;
       final wm=_week.firstMatch(line);
       if(wm!=null){flushWeek();final n=int.tryParse(wm.group(1)??'')??weeks.length+1;currentWeek=DraftWeek(n,[]);currentDay=DraftDay('Тренировка 1',[]);dayCounter=1;continue;}
       final dm=_day.firstMatch(line);
-      if(dm!=null&&!line.contains(RegExp(r'\\d+\\s*[xх×]\\s*\\d+',caseSensitive:false))){flushDay();final tail=(dm.group(2)??'').trim();final number=dm.group(1);currentDay=DraftDay(tail.isEmpty?'Тренировка '+(number??dayCounter.toString()):tail,[]);dayCounter++;continue;}
+      if(dm!=null&&!line.contains(RegExp(r'\d+\s*[xх×]\s*\d+',caseSensitive:false))){flushDay();final tail=(dm.group(2)??'').trim();final number=dm.group(1);currentDay=DraftDay(tail.isEmpty?'Тренировка '+(number??dayCounter.toString()):tail,[]);dayCounter++;continue;}
       ensureDay();
       final sm=_setsRe.firstMatch(line);
       if(sm==null){warnings.add('Не распознана схема подходов: «'+line+'»');currentDay.exercises.add(DraftExercise(line,const []));continue;}
@@ -223,7 +223,7 @@ class TrainingTextParser {
       final rpe=rm==null?null:double.tryParse(rm.group(1)!.replaceAll(',','.'));
       final rir=rim==null?null:double.tryParse(rim.group(1)!.replaceAll(',','.'));
       var exerciseName=line.substring(0,sm.start).trim();
-      exerciseName=exerciseName.replaceAll(_weightRe,'').replaceAll(RegExp(r'[-:]\\s*$'),'').trim();
+      exerciseName=exerciseName.replaceAll(_weightRe,'').replaceAll(RegExp(r'[-:]\s*$'),'').trim();
       if(exerciseName.isEmpty){exerciseName='Неизвестное упражнение';warnings.add('Не удалось определить упражнение: «'+line+'»');}
       final draftSets=List.generate(count,(_)=>DraftSet(weight:weight,reps:reps,percentage:pct,rpe:rpe,rir:rir,scheme:reps==null?'AMRAP':''));
       final existing=currentDay.exercises.indexWhere((e)=>e.name.toLowerCase()==exerciseName.toLowerCase());
