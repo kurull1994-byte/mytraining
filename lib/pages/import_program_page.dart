@@ -20,6 +20,7 @@ class _ImportProgramPageState extends State<ImportProgramPage> {
   final List<Uint8List> scanPages=[];
   DraftProgram? draft;
   bool busy=false;
+  int clarificationRound=0;
   Map<String,dynamic>? aiJson;
   final ai=AiGateway();
   @override void dispose(){text.dispose();super.dispose();}
@@ -99,7 +100,7 @@ class _ImportProgramPageState extends State<ImportProgramPage> {
       final json=await ai.analyzeText(text.text.trim());
       final d=TrainingTextParser.fromAiJson(json);
       if(mounted){
-        setState((){aiJson=json; draft=d;});
+        setState((){aiJson=json; draft=d; clarificationRound=0;});
         if(d.clarifications.isNotEmpty) {
           WidgetsBinding.instance.addPostFrameCallback((_) { if(mounted) clarifyResult(); });
         }
@@ -133,6 +134,11 @@ class _ImportProgramPageState extends State<ImportProgramPage> {
   }
   Future<void> clarifyResult() async {
     if(aiJson==null || draft==null || draft!.clarifications.isEmpty) return;
+    if(clarificationRound>=3){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Остались неоднозначности. Их можно проверить вручную в редакторе.')));
+      return;
+    }
+    clarificationRound++;
     final answers=<String,String>{};
     for(final q in draft!.clarifications) {
       final controller=TextEditingController();
@@ -183,7 +189,7 @@ class _ImportProgramPageState extends State<ImportProgramPage> {
       final refined=TrainingTextParser.fromAiJson(result);
       if(mounted){
         setState((){aiJson=result;draft=refined;});
-        if(refined.clarifications.isNotEmpty) {
+        if(refined.clarifications.isNotEmpty && clarificationRound<3) {
           WidgetsBinding.instance.addPostFrameCallback((_) { if(mounted) clarifyResult(); });
         }
       }
