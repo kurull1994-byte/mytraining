@@ -127,6 +127,7 @@ class ExerciseEditor extends StatelessWidget {
                               (set['percentage'] != null ? ' · ' + set['percentage'].toString() + '%' : ''),
                         ),
                         subtitle: Text([
+                          if (set['scheme'] != null && set['scheme'].toString().isNotEmpty) set['scheme'].toString(),
                           if (set['rpe'] != null) 'RPE ' + set['rpe'].toString(),
                           if (set['rir'] != null) 'RIR ' + set['rir'].toString(),
                         ].join(' · ')),
