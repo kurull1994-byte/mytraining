@@ -161,7 +161,7 @@ class TrainingTextParser {
           final weight=hasWeight?first:null;
           final seconds=(m.group(3)??'').trim().isNotEmpty;
           final scheme=seconds ? setCount.toString()+'x'+(reps?.toString()??'')+' сек' : (amrap?'AMRAP':'');
-          perWeek.add(List.generate(setCount.clamp(1,20),(_)=>DraftSet(weight:weight,reps:reps,scheme:scheme)));
+          perWeek.add(List.generate(setCount.clamp(1,20).toInt(),(_)=>DraftSet(weight:weight,reps:reps,scheme:scheme)));
           if(!hasWeight && !amrap && !seconds && first!=null && first>=20) {
             missing.add(exerciseName+': проверь, является ли '+first.toString()+' весом');
           }
