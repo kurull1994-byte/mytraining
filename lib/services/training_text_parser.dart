@@ -45,11 +45,23 @@ class DraftSet {
         days,
       ));
     }
+    final clarifications=<DraftClarification>[];
+    for(final raw in (json['clarifications'] as List? ?? const [])){
+      if(raw is! Map) continue;
+      final m=Map<String,dynamic>.from(raw);
+      clarifications.add(DraftClarification(
+        id:(m['id']??clarifications.length+1).toString(),
+        question:(m['question']??'Уточните, что имеется в виду.').toString(),
+        context:(m['context']??'').toString(),
+        options:(m['options'] as List? ?? const []).map((e)=>e.toString()).toList(),
+      ));
+    }
     return DraftProgram(
       name: (json['name'] ?? 'AI программа').toString(),
       weeks: weeks.isEmpty ? [DraftWeek(1, [DraftDay('Тренировка 1', [])])] : weeks,
       warnings: (json['warnings'] as List? ?? const []).map((e) => e.toString()).toList(),
       missingData: (json['missing_data'] as List? ?? const []).map((e) => e.toString()).toList(),
+      clarifications: clarifications,
     );
   }
 }
@@ -72,12 +84,21 @@ class DraftWeek {
   DraftWeek(this.number, this.days);
 }
 
+class DraftClarification {
+  final String id;
+  final String question;
+  final String context;
+  final List<String> options;
+  const DraftClarification({required this.id, required this.question, this.context = '', this.options = const []});
+}
+
 class DraftProgram {
   final String name;
   final List<DraftWeek> weeks;
   final List<String> warnings;
   final List<String> missingData;
-  DraftProgram({required this.name, required this.weeks, this.warnings = const [], this.missingData = const []});
+  final List<DraftClarification> clarifications;
+  DraftProgram({required this.name, required this.weeks, this.warnings = const [], this.missingData = const [], this.clarifications = const []});
 }
 
 class TrainingTextParser {
