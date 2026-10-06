@@ -63,7 +63,100 @@ class DayEditor extends StatelessWidget {
 }
 
 class ExerciseEditor extends StatelessWidget {
-  final AppDatabase db; final Map<String,dynamic> exercise; final VoidCallback onChanged; final Future<void> Function(Map<String,dynamic>) onEditSet; final Future<void> Function(int,String) onRename; final Future<void> Function(int) onAddSet;
-  const ExerciseEditor({super.key,required this.db,required this.exercise,required this.onChanged,required this.onEditSet,required this.onRename,required this.onAddSet});
-  @override Widget build(BuildContext context)=>Card(margin:const EdgeInsets.all(8),child:Padding(padding:const EdgeInsets.all(10),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Row(children:[Expanded(child:Text((exercise['exercise_name']??'').toString(),style:const TextStyle(fontWeight:FontWeight.bold))),IconButton(onPressed:()=>onRename(exercise['exercise_id'] as int,(exercise['exercise_name']??'').toString()),icon:const Icon(Icons.edit_outlined))]),FutureBuilder<List<Map<String,dynamic>>>(future:db.setsForWorkoutExercise(exercise['workout_exercise_id'] as int),builder:(context,s){final sets=s.data??const <Map<String,dynamic>>[];return Column(children:[...sets.map((x)=>ListTile(dense:true,leading:CircleAvatar(radius:14,child:Text(x['set_no'].toString())),title:Text((x['weight']??'—').toString()+' кг × '+(x['reps']??'—').toString()),trailing:Wrap(children:[IconButton(onPressed:()=>onEditSet(x),icon:const Icon(Icons.edit_outlined)),IconButton(onPressed:()async{await db.deletePlannedSet(x['id'] as int);onChanged();},icon:const Icon(Icons.delete_outline))])),TextButton.icon(onPressed:()=>onAddSet(exercise['workout_exercise_id'] as int),icon:const Icon(Icons.add),label:const Text('Добавить подход'))]);})])));
+  final AppDatabase db;
+  final Map<String, dynamic> exercise;
+  final VoidCallback onChanged;
+  final Future<void> Function(Map<String, dynamic>) onEditSet;
+  final Future<void> Function(int, String) onRename;
+  final Future<void> Function(int) onAddSet;
+
+  const ExerciseEditor({
+    super.key,
+    required this.db,
+    required this.exercise,
+    required this.onChanged,
+    required this.onEditSet,
+    required this.onRename,
+    required this.onAddSet,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final workoutExerciseId = exercise['workout_exercise_id'] as int;
+    final exerciseId = exercise['exercise_id'] as int;
+    final exerciseName = (exercise['exercise_name'] ?? '').toString();
+    return Card(
+      margin: const EdgeInsets.all(8),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    exerciseName,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => onRename(exerciseId, exerciseName),
+                  icon: const Icon(Icons.edit_outlined),
+                ),
+              ],
+            ),
+            FutureBuilder<List<Map<String, dynamic>>>(
+              future: db.setsForWorkoutExercise(workoutExerciseId),
+              builder: (context, snapshot) {
+                final sets = snapshot.data ?? const <Map<String, dynamic>>[];
+                return Column(
+                  children: [
+                    ...sets.map(
+                      (set) => ListTile(
+                        dense: true,
+                        leading: CircleAvatar(
+                          radius: 14,
+                          child: Text(set['set_no'].toString()),
+                        ),
+                        title: Text(
+                          (set['weight'] ?? '—').toString() +
+                              ' кг × ' +
+                              (set['reps'] ?? '—').toString(),
+                        ),
+                        subtitle: Text([
+                          if (set['rpe'] != null) 'RPE ' + set['rpe'].toString(),
+                          if (set['rir'] != null) 'RIR ' + set['rir'].toString(),
+                        ].join(' · ')),
+                        trailing: Wrap(
+                          children: [
+                            IconButton(
+                              onPressed: () => onEditSet(set),
+                              icon: const Icon(Icons.edit_outlined),
+                            ),
+                            IconButton(
+                              onPressed: () async {
+                                await db.deletePlannedSet(set['id'] as int);
+                                onChanged();
+                              },
+                              icon: const Icon(Icons.delete_outline),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: () => onAddSet(workoutExerciseId),
+                      icon: const Icon(Icons.add),
+                      label: const Text('Добавить подход'),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
