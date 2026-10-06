@@ -139,7 +139,7 @@ class HomePage extends StatelessWidget {
                 child: Padding(
                   padding: const EdgeInsets.all(14),
                   child: DropdownButtonFormField<int>(
-                    value: selected,
+                    initialValue: selected,
                     decoration: const InputDecoration(
                       labelText: 'Программа, по которой сейчас идём',
                       border: OutlineInputBorder(),
