@@ -5,6 +5,8 @@ import 'package:image_picker/image_picker.dart';
 import '../data/database.dart';
 import '../services/program_source_reader.dart';
 import '../services/training_text_parser.dart';
+import '../services/ai_gateway.dart';
+import 'ai_settings_page.dart';
 
 class ImportProgramPage extends StatefulWidget {
   final AppDatabase db;
@@ -14,6 +16,7 @@ class ImportProgramPage extends StatefulWidget {
 class _ImportProgramPageState extends State<ImportProgramPage> {
   final text=TextEditingController();
   Uint8List? imageBytes; String? imageName; DraftProgram? draft; bool busy=false;
+  final ai=AiGateway();
   @override void dispose(){text.dispose();super.dispose();}
 
   Future<void> pasteClipboard() async {
@@ -56,6 +59,23 @@ class _ImportProgramPageState extends State<ImportProgramPage> {
     if(mounted)setState(() {});
   }
 
+  Future<void> openAiSettings() async { await Navigator.push(context,MaterialPageRoute(builder:(_)=>const AiSettingsPage())); if(mounted)setState((){}); }
+
+  Future<void> aiParseText() async {
+    if(text.text.trim().isEmpty){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Введите или вставьте программу')));return;}
+    setState(()=>busy=true);
+    try { final json=await ai.analyzeText(text.text.trim()); final d=TrainingTextParser.fromAiJson(json); if(mounted)setState(()=>draft=d); }
+    catch(e){ if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString()))); }
+    finally{if(mounted)setState(()=>busy=false);}
+  }
+
+  Future<void> aiParseImage() async {
+    if(imageBytes==null){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Сначала сделайте фото или выберите изображение')));return;}
+    setState(()=>busy=true);
+    try { final json=await ai.analyzeImage(imageBytes!); final d=TrainingTextParser.fromAiJson(json); if(mounted)setState(()=>draft=d); }
+    catch(e){ if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString()))); }
+    finally{if(mounted)setState(()=>busy=false);}
+  }
   Future<void> saveDraft() async {
     if(draft==null)return;
     setState(()=>busy=true);
@@ -68,7 +88,7 @@ class _ImportProgramPageState extends State<ImportProgramPage> {
   @override Widget build(BuildContext context)=>Scaffold(
     appBar:AppBar(title:const Text('Добавить программу')),
     body:ListView(padding:const EdgeInsets.fromLTRB(16,8,16,40),children:[
-      Text('Источник программы',style:Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight:FontWeight.w800)),
+      Row(children:[Expanded(child:Text('Источник программы',style:Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight:FontWeight.w800))),IconButton(onPressed:openAiSettings,tooltip:'Настройки AI',icon:const Icon(Icons.settings_outlined))]),
       const SizedBox(height:12),
       Wrap(spacing:8,runSpacing:8,children:[
         FilledButton.icon(onPressed:pasteClipboard,icon:const Icon(Icons.content_paste),label:const Text('Вставить из буфера')),
@@ -77,11 +97,11 @@ class _ImportProgramPageState extends State<ImportProgramPage> {
         OutlinedButton.icon(onPressed: busy ? null : () => takePhoto(ImageSource.gallery),icon:const Icon(Icons.photo_library_outlined),label:const Text('Фото из галереи')),
       ]),
       const SizedBox(height:16),
-      if(imageBytes!=null)Card(child:Padding(padding:const EdgeInsets.all(8),child:Column(children:[Image.memory(imageBytes!,height:220,fit:BoxFit.contain),const SizedBox(height:8),const Text('Фото программы подготовлено. Для точного распознавания фото в следующей итерации будет подключён AI Gateway.'),]))),
+      if(imageBytes!=null)Card(child:Padding(padding:const EdgeInsets.all(8),child:Column(children:[Image.memory(imageBytes!,height:220,fit:BoxFit.contain),const SizedBox(height:8),const Text('Фото программы готово к AI-распознаванию.'),const SizedBox(height:8),FilledButton.icon(onPressed:busy?null:aiParseImage,icon:const Icon(Icons.auto_awesome),label:const Text('AI распознать фото')),]))),
       const SizedBox(height:8),
       TextField(controller:text,minLines:10,maxLines:20,decoration:const InputDecoration(border:OutlineInputBorder(),labelText:'Текст программы',hintText:'Присед 5x5 @75%\nЖим 4x8 RPE 8\nНеделя 2\n...')),
       const SizedBox(height:10),
-      FilledButton.icon(onPressed:busy?null:parseText,icon:const Icon(Icons.auto_fix_high),label:const Text('Разобрать программу')),
+      Row(children:[Expanded(child:FilledButton.icon(onPressed:busy?null:parseText,icon:const Icon(Icons.auto_fix_high),label:const Text('Разобрать локально'))),const SizedBox(width:8),Expanded(child:FilledButton.icon(onPressed:busy?null:aiParseText,icon:const Icon(Icons.auto_awesome),label:const Text('AI распознать текст')))]),
       if(draft!=null)...[
         const SizedBox(height:18),
         Card(child:Padding(padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
