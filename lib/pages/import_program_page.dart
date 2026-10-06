@@ -156,7 +156,7 @@ class _ImportProgramPageState extends State<ImportProgramPage> {
                   if(q.context.isNotEmpty) ...[
                     Text('Фрагмент программы',style:Theme.of(ctx).textTheme.labelLarge),
                     const SizedBox(height:6),
-                    Container(width:double.infinity,padding:const EdgeInsets.all(10),decoration:BoxDecoration(borderRadius:BorderRadius.circular(8),color:Theme.of(ctx).colorScheme.surfaceVariant),child:Text(q.context)),
+                    Container(width:double.infinity,padding:const EdgeInsets.all(10),decoration:BoxDecoration(borderRadius:BorderRadius.circular(8),color:Theme.of(ctx).colorScheme.surfaceContainerHighest),child:Text(q.context)),
                     const SizedBox(height:12),
                   ],
                   if(q.options.isNotEmpty)
