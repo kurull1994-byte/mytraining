@@ -91,10 +91,35 @@ class _ImportProgramPageState extends State<ImportProgramPage> {
     draft=null;
     if(mounted)setState(() {});
   }
-  Future<void> openAiSettings() async { await Navigator.push(context,MaterialPageRoute(builder:(_)=>const AiSettingsPage())); if(mounted)setState((){}); }
+  Future<void> openAiSettings() async {
+    await Navigator.push(context,MaterialPageRoute(builder:(_)=>const AiSettingsPage()));
+    if(mounted)setState((){});
+  }
+
+  Future<bool> ensureAiConfigured() async {
+    final current=await ai.apiKey();
+    if(current!=null && current.trim().isNotEmpty) return true;
+    if(!mounted)return false;
+    final openSettings=await showDialog<bool>(
+      context:context,
+      builder:(ctx)=>AlertDialog(
+        title:const Text('AI пока не настроен'),
+        content:const Text('Для AI-распознавания нужен ваш OpenAI API key. Ключ не встроен в приложение и хранится только на этом устройстве. Откройте настройки AI, сохраните ключ и затем повторите распознавание.'),
+        actions:[
+          TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Отмена')),
+          FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Настроить AI')),
+        ],
+      ),
+    );
+    if(openSettings!=true || !mounted)return false;
+    await openAiSettings();
+    final saved=await ai.apiKey();
+    return saved!=null && saved.trim().isNotEmpty;
+  }
 
   Future<void> aiParseText() async {
     if(text.text.trim().isEmpty){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Введите или вставьте программу')));return;}
+    if(!await ensureAiConfigured()) return;
     setState(()=>busy=true);
     try {
       final json=await ai.analyzeText(text.text.trim());
@@ -118,6 +143,7 @@ class _ImportProgramPageState extends State<ImportProgramPage> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Сначала сделайте фото или выберите изображение')));
       return;
     }
+    if(!await ensureAiConfigured()) return;
     setState(()=>busy=true);
     try {
       final json=await ai.analyzeImages(pages);
