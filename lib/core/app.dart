@@ -383,7 +383,7 @@ class _SetRowState extends State<_SetRow> {
       padding: const EdgeInsets.all(10),
       child: Row(children: [
         SizedBox(width: 38, child: Text('#${widget.row['set_no']}')),
-        Expanded(child: Text('План '+(widget.row['planned_weight']?.toString() ?? '—')+' × '+(widget.row['planned_reps']?.toString() ?? '—')+(widget.row['planned_percentage'] != null ? ' · '+widget.row['planned_percentage'].toString()+'%' : '')+(widget.row['planned_rpe'] != null ? ' · RPE '+widget.row['planned_rpe'].toString() : '')+(widget.row['planned_rir'] != null ? ' · RIR '+widget.row['planned_rir'].toString() : ''))),
+        Expanded(child: Text('План '+(widget.row['planned_weight']?.toString() ?? '—')+' × '+(widget.row['planned_reps']?.toString() ?? '—')+(widget.row['planned_percentage'] != null ? ' · '+widget.row['planned_percentage'].toString()+'%' : '')+(widget.row['planned_rpe'] != null ? ' · RPE '+widget.row['planned_rpe'].toString() : '')+(widget.row['planned_rir'] != null ? ' · RIR '+widget.row['planned_rir'].toString() : '')+(widget.row['planned_scheme'] != null && widget.row['planned_scheme'].toString().isNotEmpty ? ' · '+widget.row['planned_scheme'].toString() : ''))),
         SizedBox(width: 68, child: TextField(controller: weight, keyboardType: TextInputType.number, decoration: const InputDecoration(hintText: 'кг'))),
         const SizedBox(width: 6),
         SizedBox(width: 55, child: TextField(controller: reps, keyboardType: TextInputType.number, decoration: const InputDecoration(hintText: 'повт.'))),
