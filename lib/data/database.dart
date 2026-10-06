@@ -13,11 +13,14 @@ class AppDatabase {
   Future<void> init() async {
     db = await openDatabase(
       join(await getDatabasesPath(), 'my_workout_diary.db'),
-      version: 2,
+      version: 3,
       onCreate: (d, _) => _createSchema(d),
       onUpgrade: (d, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           await d.execute('ALTER TABLE planned_sets ADD COLUMN percentage REAL');
+        }
+        if (oldVersion < 3) {
+          await d.execute('ALTER TABLE planned_sets ADD COLUMN scheme TEXT');
         }
       },
     );
@@ -31,7 +34,7 @@ class AppDatabase {
     await d.execute('CREATE TABLE exercises(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT UNIQUE,category TEXT,unit TEXT DEFAULT "kg")');
     await d.execute('CREATE TABLE workouts(id INTEGER PRIMARY KEY AUTOINCREMENT,day_id INTEGER,cycle_id INTEGER,status TEXT DEFAULT "planned",started_at TEXT,finished_at TEXT,duration_sec INTEGER DEFAULT 0)');
     await d.execute('CREATE TABLE workout_exercises(id INTEGER PRIMARY KEY AUTOINCREMENT,workout_id INTEGER,exercise_id INTEGER,sort_no INTEGER)');
-    await d.execute('CREATE TABLE planned_sets(id INTEGER PRIMARY KEY AUTOINCREMENT,workout_exercise_id INTEGER,set_no INTEGER,weight REAL,reps INTEGER,percentage REAL,rpe REAL,rir REAL)');
+    await d.execute('CREATE TABLE planned_sets(id INTEGER PRIMARY KEY AUTOINCREMENT,workout_exercise_id INTEGER,set_no INTEGER,weight REAL,reps INTEGER,percentage REAL,rpe REAL,rir REAL,scheme TEXT)');
     await d.execute('CREATE TABLE actual_sets(id INTEGER PRIMARY KEY AUTOINCREMENT,planned_set_id INTEGER,weight REAL,reps INTEGER,created_at TEXT NOT NULL)');
     await d.execute('CREATE TABLE user_profile(id INTEGER PRIMARY KEY CHECK(id=1),name TEXT,age INTEGER,sex TEXT,height REAL,weight REAL,experience TEXT,specialization TEXT,goals TEXT)');
   }
@@ -299,7 +302,7 @@ class AppDatabase {
   Future<void> renameExercise(int exerciseId, String name) =>
       db.update('exercises', {'name': name.trim()}, where: 'id=?', whereArgs: [exerciseId]);
 
-  Future<void> addPlannedSet(int workoutExerciseId, {double? weight, int? reps, double? percentage, double? rpe, double? rir}) async {
+  Future<void> addPlannedSet(int workoutExerciseId, {double? weight, int? reps, double? percentage, double? rpe, double? rir, String? scheme}) async {
     final rows = await setsForWorkoutExercise(workoutExerciseId);
     final next = rows.length + 1;
     await db.insert('planned_sets', {
@@ -310,12 +313,13 @@ class AppDatabase {
       'percentage': percentage,
       'rpe': rpe,
       'rir': rir,
+      'scheme': scheme,
     });
   }
 
-  Future<void> updatePlannedSet(int id, {double? weight, int? reps, double? percentage, double? rpe, double? rir}) =>
+  Future<void> updatePlannedSet(int id, {double? weight, int? reps, double? percentage, double? rpe, double? rir, String? scheme}) =>
       db.update('planned_sets', {
-        'weight': weight, 'reps': reps ?? 0, 'percentage': percentage, 'rpe': rpe, 'rir': rir,
+        'weight': weight, 'reps': reps ?? 0, 'percentage': percentage, 'rpe': rpe, 'rir': rir, 'scheme': scheme,
       }, where: 'id=?', whereArgs: [id]);
 
   Future<void> deletePlannedSet(int id) => db.delete('planned_sets', where: 'id=?', whereArgs: [id]);
@@ -347,7 +351,7 @@ class AppDatabase {
         for (final sourceExercise in sourceDay.exercises) {
           final weId = await addExerciseToDay(dayId, sourceExercise.name);
           for (final sourceSet in sourceExercise.sets) {
-            await addPlannedSet(weId, weight: sourceSet.weight, reps: sourceSet.reps, percentage: sourceSet.percentage, rpe: sourceSet.rpe, rir: sourceSet.rir);
+            await addPlannedSet(weId, weight: sourceSet.weight, reps: sourceSet.reps, percentage: sourceSet.percentage, rpe: sourceSet.rpe, rir: sourceSet.rir, scheme: sourceSet.scheme);
             final all = await setsForWorkoutExercise(weId);
             if (all.isNotEmpty) {
               final last = all.last;
