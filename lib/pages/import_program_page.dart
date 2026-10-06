@@ -251,6 +251,21 @@ class _ImportProgramPageState extends State<ImportProgramPage> {
       const SizedBox(height:10),
       Row(children:[Expanded(child:FilledButton.icon(onPressed:busy?null:parseText,icon:const Icon(Icons.auto_fix_high),label:const Text('Разобрать локально'))),const SizedBox(width:8),Expanded(child:FilledButton.icon(onPressed:busy?null:aiParseText,icon:const Icon(Icons.auto_awesome),label:const Text('AI распознать текст')))]),
       if(draft!=null)...[
+        if(draft!.clarifications.isNotEmpty) ...[
+          const SizedBox(height:14),
+          Card(
+            child:Padding(
+              padding:const EdgeInsets.all(14),
+              child:Row(children:[
+                const Icon(Icons.help_outline),
+                const SizedBox(width:10),
+                Expanded(child:Text('AI нашёл неоднозначные места: '+draft!.clarifications.length.toString()+'. Ответьте на вопросы, чтобы уточнить импорт.')) ,
+                const SizedBox(width:8),
+                FilledButton(onPressed:busy?null:clarifyResult,child:const Text('Уточнить')),
+              ]),
+            ),
+          ),
+        ],
         const SizedBox(height:18),
         Card(child:Padding(padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
           Text(draft!.name,style:const TextStyle(fontSize:19,fontWeight:FontWeight.bold)),
