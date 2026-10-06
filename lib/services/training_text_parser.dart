@@ -213,8 +213,8 @@ class TrainingTextParser {
     for(final raw in (json['clarifications'] as List?)??const []){
       if(raw is! Map) continue;
       final q=Map<String,dynamic>.from(raw);
-      clarifications.add(DraftClarification(id:(q['id']??clarifications.length+1).toString(),question:(q['question']??'Уточните, что имеется в виду.').toString(),context:(q['context']??'').toString(),options:(q['options'] as List???const []).map((e)=>e.toString()).toList()));
+      clarifications.add(DraftClarification(id:(q['id']??clarifications.length+1).toString(),question:(q['question']??'Уточните, что имеется в виду.').toString(),context:(q['context']??'').toString(),options:(q['options'] as List??const []).map((e)=>e.toString()).toList()));
     }
-    return DraftProgram(name:(json['name']??'AI программа').toString(),weeks:weeks.isEmpty?[DraftWeek(1,[DraftDay('Тренировка 1',[])])]:weeks,warnings:(json['warnings'] as List???const []).map((e)=>e.toString()).toList(),missingData:(json['missing_data'] as List???const []).map((e)=>e.toString()).toList(),clarifications:clarifications);
+    return DraftProgram(name:(json['name']??'AI программа').toString(),weeks:weeks.isEmpty?[DraftWeek(1,[DraftDay('Тренировка 1',[])])]:weeks,warnings:(json['warnings'] as List??const []).map((e)=>e.toString()).toList(),missingData:(json['missing_data'] as List??const []).map((e)=>e.toString()).toList(),clarifications:clarifications);
   }
 }
