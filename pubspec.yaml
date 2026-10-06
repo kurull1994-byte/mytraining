@@ -16,7 +16,7 @@ dependencies:
   file_picker: ^8.3.7
   image_picker: ^1.1.2
   spreadsheet_decoder: ^2.3.0
-  archive: ^4.0.7
+  archive: ^3.6.1
   xml: ^6.6.1
 
 dev_dependencies:
