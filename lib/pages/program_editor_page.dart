@@ -30,9 +30,10 @@ class _ProgramEditorPageState extends State<ProgramEditorPage> {
   }
   Future<void> editSet(Map<String,dynamic> s) async {
     final w=TextEditingController(text:(s['weight']??'').toString()); final r=TextEditingController(text:(s['reps']??5).toString());
+    final pct=TextEditingController(text:(s['percentage']??'').toString());
     final rpe=TextEditingController(text:(s['rpe']??'').toString()); final rir=TextEditingController(text:(s['rir']??'').toString());
-    final ok=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(title:Text('Подход '+s['set_no'].toString()),content:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:w,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'Вес, кг')),TextField(controller:r,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'Повторения')),TextField(controller:rpe,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'RPE')),TextField(controller:rir,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'RIR'))]),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Отмена')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Сохранить'))]));
-    if(ok==true){await widget.db.updatePlannedSet(s['id'] as int,weight:double.tryParse(w.text.replaceAll(',','.')),reps:int.tryParse(r.text),rpe:double.tryParse(rpe.text.replaceAll(',','.')),rir:double.tryParse(rir.text.replaceAll(',','.')));if(mounted)setState((){});} w.dispose();r.dispose();rpe.dispose();rir.dispose();
+    final ok=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(title:Text('Подход '+s['set_no'].toString()),content:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:w,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'Вес, кг')),TextField(controller:r,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'Повторения')),TextField(controller:pct,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'% от 1ПМ')),TextField(controller:rpe,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'RPE')),TextField(controller:rir,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'RIR'))]),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Отмена')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Сохранить'))]));
+    if(ok==true){await widget.db.updatePlannedSet(s['id'] as int,weight:double.tryParse(w.text.replaceAll(',','.')),reps:int.tryParse(r.text),percentage:double.tryParse(pct.text.replaceAll(',','.')),rpe:double.tryParse(rpe.text.replaceAll(',','.')),rir:double.tryParse(rir.text.replaceAll(',','.')));if(mounted)setState((){});} w.dispose();r.dispose();pct.dispose();rpe.dispose();rir.dispose();
   }
   Future<void> renameExercise(int eid,String current) async {
     final c=TextEditingController(text:current);
@@ -122,7 +123,8 @@ class ExerciseEditor extends StatelessWidget {
                         title: Text(
                           (set['weight'] ?? '—').toString() +
                               ' кг × ' +
-                              (set['reps'] ?? '—').toString(),
+                              (set['reps'] ?? '—').toString() +
+                              (set['percentage'] != null ? ' · ' + set['percentage'].toString() + '%' : ''),
                         ),
                         subtitle: Text([
                           if (set['rpe'] != null) 'RPE ' + set['rpe'].toString(),
