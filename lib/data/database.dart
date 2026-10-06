@@ -91,7 +91,7 @@ class AppDatabase {
 
   Future<List<Map<String, dynamic>>> workoutSets(int workoutId) => db.rawQuery('''
     SELECT ps.id set_id,ps.set_no,ps.weight planned_weight,ps.reps planned_reps,ps.percentage planned_percentage,
-    ps.rpe planned_rpe,ps.rir planned_rir,
+    ps.rpe planned_rpe,ps.rir planned_rir,ps.scheme planned_scheme,
     we.exercise_id,e.name exercise_name,a.weight actual_weight,a.reps actual_reps
     FROM planned_sets ps
     JOIN workout_exercises we ON we.id=ps.workout_exercise_id
