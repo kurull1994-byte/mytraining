@@ -60,13 +60,53 @@ class AiGateway {
       }},
       'warnings':{'type':'array','items':{'type':'string'}},
       'missing_data':{'type':'array','items':{'type':'string'}},
+      'clarifications':{'type':'array','items':{'type':'object','additionalProperties':false,'properties':{'id':{'type':'string'},'question':{'type':'string'},'context':{'type':'string'},'options':{'type':'array','items':{'type':'string'}}},'required':['id','question','context','options']}}},
     },
-    'required':['name','weeks','warnings','missing_data'],
+    'required':['name','weeks','warnings','missing_data','clarifications'],
   };
 
   Future<Map<String,dynamic>> analyzeText(String source) async {
     final instruction=_instruction() + '\n\nИСТОЧНИК:\n' + source;
     return _request([{ 'type':'input_text','text':instruction }]);
+  }
+
+  Future<Map<String,dynamic>> refineText(
+    String source,
+    Map<String,dynamic> recognized,
+    Map<String,String> answers,
+  ) async {
+    final content=[{
+      'type':'input_text',
+      'text':_instruction() +
+          '\n\nИСХОДНЫЙ ТЕКСТ:\n' + source +
+          '\n\nПРЕДВАРИТЕЛЬНОЕ РАСПОЗНАВАНИЕ:\n' + jsonEncode(recognized) +
+          '\n\nОТВЕТЫ ПОЛЬЗОВАТЕЛЯ НА УТОЧНЕНИЯ:\n' + jsonEncode(answers) +
+          '\n\nПересобери итоговую программу с учётом ответов. Сохрани все уже уверенно распознанные данные без изменений. Уточнения, на которые получен ответ, больше не считай неоднозначными.',
+    }];
+    return _request(content);
+  }
+
+  Future<Map<String,dynamic>> refineImages(
+    List<Uint8List> images,
+    Map<String,dynamic> recognized,
+    Map<String,String> answers,
+  ) async {
+    if(images.isEmpty) throw StateError('Нет изображений для уточнения.');
+    final content=<Map<String,dynamic>>[{
+      'type':'input_text',
+      'text':_instruction() +
+          '\n\nПРЕДВАРИТЕЛЬНОЕ РАСПОЗНАВАНИЕ:\n' + jsonEncode(recognized) +
+          '\n\nОТВЕТЫ ПОЛЬЗОВАТЕЛЯ НА УТОЧНЕНИЯ:\n' + jsonEncode(answers) +
+          '\n\nПовторно проверь страницы по ответам пользователя. Сохрани уверенно распознанные данные. Исправь только неоднозначные места.',
+    }];
+    for(var i=0;i<images.length;i++){
+      content.add({
+        'type':'input_image',
+        'detail':'high',
+        'image_url':'data:image/jpeg;base64,'+base64Encode(images[i]),
+      });
+    }
+    return _request(content);
   }
 
   Future<Map<String,dynamic>> analyzeImage(Uint8List bytes,{String mimeType='image/jpeg'}) async {
@@ -107,7 +147,8 @@ class AiGateway {
 Для сетов форматируй каждый фактически заданный подход отдельным объектом.
 warnings и missing_data используй для сомнительных или неполных мест.
 Отдельно различай тренировочную неделю и тренировочный день.
-Название упражнения должно быть максимально близко к исходному тексту.''';
+Название упражнения должно быть максимально близко к исходному тексту.
+Если любой фрагмент источника можно понять более чем одним способом или таблица/OCR неоднозначны, НЕ УГАДЫВАЙ: добавь clarifications с точным вопросом, контекстом строки/ячейки и 2–4 вариантами ответа. Сомнительный фрагмент пометь warning или missing_data.''';
 
   Future<Map<String,dynamic>> _request(List<Map<String,dynamic>> userContent) async {
     final key=await apiKey();
