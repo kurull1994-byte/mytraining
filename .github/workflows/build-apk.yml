@@ -26,6 +26,9 @@ jobs:
       - name: Generate Android project
         run: flutter create --platforms=android --org=ru.workoutdiary --project-name=my_workout_diary .
 
+      - name: Set Android compile SDK
+        run: sed -i '/compileSdk =/s/.*/    compileSdk = 36/' android/app/build.gradle.kts
+
       - name: Install dependencies
         run: flutter pub get
 
