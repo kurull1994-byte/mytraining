@@ -18,11 +18,12 @@ class _ImportProgramPageState extends State<ImportProgramPage> {
 
   Future<void> pasteClipboard() async {
     final data=await Clipboard.getData(Clipboard.kTextPlain);
-    if(data?.text==null||data!.text!.trim().isEmpty){
+    final clipboardText = data?.text?.trim();
+    if(clipboardText == null || clipboardText.isEmpty){
       if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('В буфере нет текста')));
       return;
     }
-    text.text=data!.text; parseText();
+    text.text=clipboardText; parseText();
   }
 
   void parseText(){
@@ -51,7 +52,7 @@ class _ImportProgramPageState extends State<ImportProgramPage> {
     final photo=await picker.pickImage(source:source,maxWidth:2200,imageQuality:90);
     if(photo==null)return;
     imageBytes=await photo.readAsBytes(); imageName=photo.name;
-    if(mounted)setState(()=>{});
+    if(mounted)setState(() {});
   }
 
   Future<void> saveDraft() async {
@@ -71,8 +72,8 @@ class _ImportProgramPageState extends State<ImportProgramPage> {
       Wrap(spacing:8,runSpacing:8,children:[
         FilledButton.icon(onPressed:pasteClipboard,icon:const Icon(Icons.content_paste),label:const Text('Вставить из буфера')),
         OutlinedButton.icon(onPressed:busy?null:pickFile,icon:const Icon(Icons.attach_file),label:const Text('Excel / Word / TXT')),
-        OutlinedButton.icon(onPressed:busy?null()=>takePhoto(ImageSource.camera),icon:const Icon(Icons.photo_camera_outlined),label:const Text('Сканировать')),
-        OutlinedButton.icon(onPressed:busy?null()=>takePhoto(ImageSource.gallery),icon:const Icon(Icons.photo_library_outlined),label:const Text('Фото из галереи')),
+        OutlinedButton.icon(onPressed: busy ? null : () => takePhoto(ImageSource.camera),icon:const Icon(Icons.photo_camera_outlined),label:const Text('Сканировать')),
+        OutlinedButton.icon(onPressed: busy ? null : () => takePhoto(ImageSource.gallery),icon:const Icon(Icons.photo_library_outlined),label:const Text('Фото из галереи')),
       ]),
       const SizedBox(height:16),
       if(imageBytes!=null)Card(child:Padding(padding:const EdgeInsets.all(8),child:Column(children:[Image.memory(imageBytes!,height:220,fit:BoxFit.contain),const SizedBox(height:8),const Text('Фото программы подготовлено. Для точного распознавания фото в следующей итерации будет подключён AI Gateway.'),]))),
