@@ -30,12 +30,37 @@ class Shell extends ConsumerStatefulWidget {
 
 class _ShellState extends ConsumerState<Shell> {
   int index = 0;
+  int? activeCycleId;
+
+  @override
+  void initState() {
+    super.initState();
+    ref.read(databaseProvider).activeCycleId().then((id) {
+      if (mounted) setState(() => activeCycleId = id);
+    });
+  }
+
+  Future<void> setActiveCycle(int? id) async {
+    await ref.read(databaseProvider).setActiveCycleId(id);
+    if (mounted) setState(() => activeCycleId = id);
+  }
+
   @override
   Widget build(BuildContext context) {
     final db = ref.read(databaseProvider);
     final pages = [
-      HomePage(db: db, onStart: () => _startNext(db)),
-      ProgramPage(db: db, onStart: (id) => _openWorkout(db, id)),
+      HomePage(
+        db: db,
+        activeCycleId: activeCycleId,
+        onSelectCycle: setActiveCycle,
+        onStart: () => _startNext(db),
+      ),
+      ProgramPage(
+        db: db,
+        activeCycleId: activeCycleId,
+        onActiveChanged: setActiveCycle,
+        onStart: (id) => _openWorkout(db, id),
+      ),
       StatisticsPage(db: db),
       HistoryPage(db: db),
       ProfilePage(db: db),
@@ -61,7 +86,7 @@ class _ShellState extends ConsumerState<Shell> {
   }
 
   Future<void> _startNext(AppDatabase db) async {
-    final rows = await db.nextWorkouts();
+    final rows = await db.nextWorkouts(cycleId: activeCycleId);
     if (!mounted) return;
     if (rows.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Нет запланированных тренировок')));
@@ -77,11 +102,21 @@ class _ShellState extends ConsumerState<Shell> {
 }
 
 class HomePage extends StatelessWidget {
-  final AppDatabase db; final VoidCallback onStart;
-  const HomePage({super.key, required this.db, required this.onStart});
+  final AppDatabase db;
+  final int? activeCycleId;
+  final Future<void> Function(int?) onSelectCycle;
+  final VoidCallback onStart;
+
+  const HomePage({
+    super.key,
+    required this.db,
+    required this.activeCycleId,
+    required this.onSelectCycle,
+    required this.onStart,
+  });
   @override
   Widget build(BuildContext context) => FutureBuilder<List<Map<String, dynamic>>>(
-    future: db.nextWorkouts(),
+    future: db.nextWorkouts(cycleId: activeCycleId),
     builder: (context, snap) {
       final rows = snap.data ?? const <Map<String, dynamic>>[];
       final next = rows.isEmpty ? null : rows.first;
@@ -92,6 +127,36 @@ class HomePage extends StatelessWidget {
           const SizedBox(height: 4),
           Text('Тренируйся. Записывай. Прогрессируй.', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
           const SizedBox(height: 24),
+          FutureBuilder<List<Map<String, dynamic>>>(
+            future: db.allCycles(),
+            builder: (context, cyclesSnap) {
+              final cycles = cyclesSnap.data ?? const <Map<String, dynamic>>[];
+              if (cycles.isEmpty) return const SizedBox.shrink();
+              final selected = cycles.any((c) => c['id'] == activeCycleId)
+                  ? activeCycleId
+                  : cycles.first['id'] as int;
+              return Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: DropdownButtonFormField<int>(
+                    value: selected,
+                    decoration: const InputDecoration(
+                      labelText: 'Программа, по которой сейчас идём',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: cycles.map((c) => DropdownMenuItem<int>(
+                      value: c['id'] as int,
+                      child: Text((c['name'] ?? 'Цикл').toString()),
+                    )).toList(),
+                    onChanged: (value) {
+                      if (value != null) onSelectCycle(value);
+                    },
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 12),
           Card(child: Padding(
             padding: const EdgeInsets.all(18),
             child: next == null ? const Text('Все запланированные тренировки выполнены.') : Column(
@@ -136,8 +201,18 @@ Widget _metric(String title, String value) => Card(
 );
 
 class ProgramPage extends StatefulWidget {
-  final AppDatabase db; final Future<void> Function(int) onStart;
-  const ProgramPage({super.key,required this.db,required this.onStart});
+  final AppDatabase db;
+  final Future<void> Function(int) onStart;
+  final int? activeCycleId;
+  final ValueChanged<int?> onActiveChanged;
+
+  const ProgramPage({
+    super.key,
+    required this.db,
+    required this.onStart,
+    required this.activeCycleId,
+    required this.onActiveChanged,
+  });
   @override State<ProgramPage> createState()=>_ProgramPageState();
 }
 
@@ -148,8 +223,36 @@ class _ProgramPageState extends State<ProgramPage> {
   }
   Future<void> openImport() async {
     final id=await Navigator.push<int?>(context,MaterialPageRoute(builder:(_)=>ImportProgramPage(db:widget.db)));
-    if(id!=null&&mounted)setState((){});
+    if(id!=null){
+      await widget.db.setActiveCycleId(id);
+      widget.onActiveChanged(id);
+    }
+    if(mounted)setState((){});
   }
+
+  Future<void> deleteCycle(Map<String,dynamic> cycle) async {
+    final name=(cycle['name']??'Цикл').toString();
+    final ok=await showDialog<bool>(
+      context:context,
+      builder:(ctx)=>AlertDialog(
+        title:const Text('Удалить программу?'),
+        content:Text('Удалить цикл «'+name+'» вместе с неделями, тренировками и результатами?'),
+        actions:[
+          TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Отмена')),
+          FilledButton(
+            onPressed:()=>Navigator.pop(ctx,true),
+            style:FilledButton.styleFrom(backgroundColor:Theme.of(ctx).colorScheme.error),
+            child:const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+    if(ok!=true)return;
+    await widget.db.deleteCycle(cycle['id'] as int);
+    widget.onActiveChanged(await widget.db.activeCycleId());
+    if(mounted)setState((){});
+  }
+
   @override Widget build(BuildContext context)=>FutureBuilder<List<Map<String,dynamic>>>(
     future:widget.db.allCycles(),
     builder:(context,s){
@@ -164,7 +267,20 @@ class _ProgramPageState extends State<ProgramPage> {
         ]),
         const SizedBox(height:14),
         if(cycles.isEmpty)const Card(child:ListTile(title:Text('Нет программ'))),
-        ...cycles.map((c)=>_CycleCard(db:widget.db,cycle:c,onEdit:()=>openEditor(cycleId:c['id'] as int),onStart:widget.onStart)),
+        ...cycles.map((c)=>_CycleCard(
+          db:widget.db,
+          cycle:c,
+          isActive:c['id']==widget.activeCycleId,
+          onEdit:()=>openEditor(cycleId:c['id'] as int),
+          onDelete:()=>deleteCycle(c),
+          onMakeActive:() async {
+            final id=c['id'] as int;
+            await widget.db.setActiveCycleId(id);
+            widget.onActiveChanged(id);
+            if(mounted)setState((){});
+          },
+          onStart:widget.onStart,
+        )),
       ]);
     },
   );
@@ -173,9 +289,21 @@ class _ProgramPageState extends State<ProgramPage> {
 class _CycleCard extends StatefulWidget {
   final AppDatabase db;
   final Map<String,dynamic> cycle;
+  final bool isActive;
   final VoidCallback onEdit;
+  final VoidCallback onDelete;
+  final Future<void> Function() onMakeActive;
   final Future<void> Function(int) onStart;
-  const _CycleCard({required this.db,required this.cycle,required this.onEdit,required this.onStart});
+
+  const _CycleCard({
+    required this.db,
+    required this.cycle,
+    required this.isActive,
+    required this.onEdit,
+    required this.onDelete,
+    required this.onMakeActive,
+    required this.onStart,
+  });
   @override State<_CycleCard> createState()=>_CycleCardState();
 }
 
@@ -189,8 +317,36 @@ class _CycleCardState extends State<_CycleCard> {
       padding:const EdgeInsets.fromLTRB(14,12,14,10),
       child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         Row(children:[
-          Expanded(child:Text((widget.cycle['name']??'Цикл').toString(),style:const TextStyle(fontSize:20,fontWeight:FontWeight.w800))),
-          IconButton(onPressed:widget.onEdit,icon:const Icon(Icons.edit_outlined)),
+          Expanded(
+            child:Column(
+              crossAxisAlignment:CrossAxisAlignment.start,
+              children:[
+                Text((widget.cycle['name']??'Цикл').toString(),style:const TextStyle(fontSize:20,fontWeight:FontWeight.w800)),
+                if(widget.isActive)
+                  const Text('АКТИВНАЯ ПРОГРАММА',style:TextStyle(fontSize:11,fontWeight:FontWeight.w700)),
+              ],
+            ),
+          ),
+          if(!widget.isActive)
+            IconButton(
+              tooltip:'Сделать активной',
+              onPressed:widget.onMakeActive,
+              icon:const Icon(Icons.radio_button_unchecked),
+            )
+          else
+            const Icon(Icons.radio_button_checked),
+          IconButton(onPressed:widget.onEdit,tooltip:'Редактировать',icon:const Icon(Icons.edit_outlined)),
+          PopupMenuButton<String>(
+            onSelected:(value){
+              if(value=='active') widget.onMakeActive();
+              if(value=='delete') widget.onDelete();
+            },
+            itemBuilder:(_)=>[
+              if(!widget.isActive)
+                const PopupMenuItem(value:'active',child:Text('Сделать активной')),
+              const PopupMenuItem(value:'delete',child:Text('Удалить программу')),
+            ],
+          ),
         ]),
         Text('Тренировочный цикл · '+(widget.cycle['weeks']??1).toString()+' недель'),
         const SizedBox(height:10),
