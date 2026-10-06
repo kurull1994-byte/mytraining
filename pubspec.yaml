@@ -18,6 +18,8 @@ dependencies:
   spreadsheet_decoder: ^2.3.0
   archive: ^3.6.1
   xml: ^6.6.1
+  http: ^1.6.0
+  flutter_secure_storage: ^11.2.0
 
 dev_dependencies:
   flutter_test:
