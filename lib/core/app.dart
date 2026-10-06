@@ -142,7 +142,6 @@ class ProgramPage extends StatefulWidget {
 }
 
 class _ProgramPageState extends State<ProgramPage> {
-  int selectedWeek=1;
   Future<void> openEditor({int? cycleId}) async {
     final id=await Navigator.push<int?>(context,MaterialPageRoute(builder:(_)=>ProgramEditorPage(db:widget.db,cycleId:cycleId)));
     if(id!=null&&mounted)setState((){});
@@ -171,33 +170,96 @@ class _ProgramPageState extends State<ProgramPage> {
   );
 }
 
-class _CycleCard extends StatelessWidget {
-  final AppDatabase db; final Map<String,dynamic> cycle; final VoidCallback onEdit; final Future<void> Function(int) onStart;
+class _CycleCard extends StatefulWidget {
+  final AppDatabase db;
+  final Map<String,dynamic> cycle;
+  final VoidCallback onEdit;
+  final Future<void> Function(int) onStart;
   const _CycleCard({required this.db,required this.cycle,required this.onEdit,required this.onStart});
-  @override Widget build(BuildContext context)=>Card(
+  @override State<_CycleCard> createState()=>_CycleCardState();
+}
+
+class _CycleCardState extends State<_CycleCard> {
+  int selectedIndex=0;
+
+  @override
+  Widget build(BuildContext context)=>Card(
     margin:const EdgeInsets.only(bottom:12),
-    child:Padding(padding:const EdgeInsets.fromLTRB(14,12,14,6),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-      Row(children:[Expanded(child:Text((cycle['name']??'Цикл').toString(),style:const TextStyle(fontSize:20,fontWeight:FontWeight.w800))),IconButton(onPressed:onEdit,icon:const Icon(Icons.edit_outlined))]),
-      Text('Тренировочный цикл · '+(cycle['weeks']??1).toString()+' недель'),
-      const SizedBox(height:10),
-      FutureBuilder<List<Map<String,dynamic>>>(future:db.weeksForCycle(cycle['id'] as int),builder:(context,s){
-        final weeks=s.data??const <Map<String,dynamic>>[];
-        return Column(children:[
-          SizedBox(height:44,child:ListView.separated(scrollDirection:Axis.horizontal,itemCount:weeks.length,separatorBuilder:(_,__)=>const SizedBox(width:8),itemBuilder:(context,i)=>ChoiceChip(label:Text('Неделя '+weeks[i]['week_no'].toString()),selected:i==0,onSelected:(_){ }))),
-          ...weeks.map((w)=>_WeekPreview(db:db,week:w,onStart:onStart)),
-        ]);
-      }),
-    ])),
+    child:Padding(
+      padding:const EdgeInsets.fromLTRB(14,12,14,10),
+      child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+        Row(children:[
+          Expanded(child:Text((widget.cycle['name']??'Цикл').toString(),style:const TextStyle(fontSize:20,fontWeight:FontWeight.w800))),
+          IconButton(onPressed:widget.onEdit,icon:const Icon(Icons.edit_outlined)),
+        ]),
+        Text('Тренировочный цикл · '+(widget.cycle['weeks']??1).toString()+' недель'),
+        const SizedBox(height:10),
+        FutureBuilder<List<Map<String,dynamic>>>(
+          future:widget.db.weeksForCycle(widget.cycle['id'] as int),
+          builder:(context,s){
+            final weeks=s.data??const <Map<String,dynamic>>[];
+            if(weeks.isEmpty)return const Text('Недели ещё не добавлены');
+            if(selectedIndex>=weeks.length) selectedIndex=weeks.length-1;
+            final selected=weeks[selectedIndex];
+            return Column(children:[
+              SizedBox(
+                height:44,
+                child:ListView.separated(
+                  scrollDirection:Axis.horizontal,
+                  itemCount:weeks.length,
+                  separatorBuilder:(_,__)=>const SizedBox(width:8),
+                  itemBuilder:(context,i)=>ChoiceChip(
+                    label:Text('Неделя '+weeks[i]['week_no'].toString()),
+                    selected:i==selectedIndex,
+                    onSelected:(_){
+                      if(!mounted)return;
+                      setState(()=>selectedIndex=i);
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(height:6),
+              Align(alignment:Alignment.centerLeft,child:Text('Неделя '+selected['week_no'].toString(),style:const TextStyle(fontWeight:FontWeight.w700))),
+              _WeekPreview(db:widget.db,week:selected,onStart:widget.onStart),
+            ]);
+          },
+        ),
+      ]),
+    ),
   );
 }
 
 class _WeekPreview extends StatelessWidget {
-  final AppDatabase db; final Map<String,dynamic> week; final Future<void> Function(int) onStart;
+  final AppDatabase db;
+  final Map<String,dynamic> week;
+  final Future<void> Function(int) onStart;
   const _WeekPreview({required this.db,required this.week,required this.onStart});
-  @override Widget build(BuildContext context)=>FutureBuilder<List<Map<String,dynamic>>>(future:db.daysForWeek(week['id'] as int),builder:(context,s){
-    final days=s.data??const <Map<String,dynamic>>[];
-    return Column(children:[...days.map((d)=>Card(color:const Color(0xFF111419),child:ListTile(title:Text((d['name']??'Тренировка').toString(),style:const TextStyle(fontWeight:FontWeight.w700)),subtitle:const Text('Открыть тренировку'),trailing:const Icon(Icons.play_circle_outline),onTap:()async{final rows=await db.db.query('workouts',where:'day_id=?',whereArgs:[d['id']],limit:1);if(rows.isNotEmpty)await onStart(rows.first['id'] as int);}))) ]);
-  });
+
+  @override
+  Widget build(BuildContext context)=>FutureBuilder<List<Map<String,dynamic>>>(
+    future:db.daysForWeek(week['id'] as int),
+    builder:(context,s){
+      final days=s.data??const <Map<String,dynamic>>[];
+      if(days.isEmpty)return const Padding(
+        padding:EdgeInsets.all(12),
+        child:Align(alignment:Alignment.centerLeft,child:Text('В этой неделе нет тренировок')),
+      );
+      return Column(children:[
+        ...days.map((d)=>Card(
+          color:const Color(0xFF111419),
+          child:ListTile(
+            title:Text((d['name']??'Тренировка').toString(),style:const TextStyle(fontWeight:FontWeight.w700)),
+            subtitle:const Text('Открыть тренировку'),
+            trailing:const Icon(Icons.play_circle_outline),
+            onTap:()async{
+              final rows=await db.db.query('workouts',where:'day_id=?',whereArgs:[d['id']],limit:1);
+              if(rows.isNotEmpty)await onStart(rows.first['id'] as int);
+            },
+          ),
+        )),
+      ]);
+    },
+  );
 }
 class ActiveWorkoutPage extends StatefulWidget {
   final AppDatabase db; final int workoutId;
@@ -321,7 +383,7 @@ class _SetRowState extends State<_SetRow> {
       padding: const EdgeInsets.all(10),
       child: Row(children: [
         SizedBox(width: 38, child: Text('#${widget.row['set_no']}')),
-        Expanded(child: Text('План ${widget.row['planned_weight']} × ${widget.row['planned_reps']}')),
+        Expanded(child: Text('План '+(widget.row['planned_weight']?.toString() ?? '—')+' × '+(widget.row['planned_reps']?.toString() ?? '—')+(widget.row['planned_percentage'] != null ? ' · '+widget.row['planned_percentage'].toString()+'%' : '')+(widget.row['planned_rpe'] != null ? ' · RPE '+widget.row['planned_rpe'].toString() : '')+(widget.row['planned_rir'] != null ? ' · RIR '+widget.row['planned_rir'].toString() : ''))),
         SizedBox(width: 68, child: TextField(controller: weight, keyboardType: TextInputType.number, decoration: const InputDecoration(hintText: 'кг'))),
         const SizedBox(width: 6),
         SizedBox(width: 55, child: TextField(controller: reps, keyboardType: TextInputType.number, decoration: const InputDecoration(hintText: 'повт.'))),
